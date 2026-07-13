@@ -9,11 +9,11 @@ import * as THREE from '../assets/vendor/three.module.min.js';
 
 const ALBUMS = [
   { file: 'lost-and-found.png' ,        name: 'Lost and Found',          year: 2008,
-    tracks: ['미아 Lost Child'] },
+    tracks: ['미아 Lost Child'], gallery: 'lost-and-found', galleryN: 6 },
   { file: 'iu-im.png' ,                 name: 'IU…IM',                   year: 2009,
-    tracks: ['마쉬멜로우 Marshmallow'] },
+    tracks: ['마쉬멜로우 Marshmallow'], gallery: 'iu-im', galleryN: 6 },
   { file: 'growing-up.jpeg',            name: 'Growing Up',              year: 2009,
-    tracks: ['Boo', '있잖아 Hey'] },
+    tracks: ['Boo', '있잖아 Hey'], gallery: 'growing-up', galleryN: 14 },
   { file: 'real.png' ,                  name: 'Real',                    year: 2010,
     tracks: ['좋은 날 Good Day'] },
   { file: 'last-fantasy.jpeg',          name: 'Last Fantasy',            year: 2011,
@@ -63,6 +63,10 @@ function preloadCovers() {
         })
     )
   ).then((list) => { AVAILABLE = list.filter(Boolean); });
+}
+
+function gallerySrc(album, i) {
+  return 'assets/covers/tracks/' + album.gallery + '/t' + String(i + 1).padStart(2, '0') + '.jpg';
 }
 
 const REDUCED_MOTION = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -683,6 +687,7 @@ function drawPlayerCards(tracks) {
   const fmt = (sec) => `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, '0')}`;
 
   tracks.forEach((track, i) => {
+    const hasTitle = track != null;
     ctx.save();
     ctx.translate(0, CARD_H * i);
     // 卡体 + 顶部提手
@@ -690,12 +695,14 @@ function drawPlayerCards(tracks) {
     rr(CARD_W / 2 - 70, 20, 140, 10, 5); ctx.fillStyle = '#e8e8e8'; ctx.fill();
     // 封面挖孔（纯黑 = 着色器里替换成封面）
     rr(HOLE.x, HOLE.y, HOLE.size, HOLE.size, 28); ctx.fillStyle = '#000'; ctx.fill();
-    // 歌名（每格不同）
-    ctx.fillStyle = '#f2f2f2'; ctx.font = '600 30px sans-serif'; ctx.textAlign = 'left';
-    let title = track;
-    while (ctx.measureText(title).width > 500 && title.length > 2) title = title.slice(0, -2);
-    if (title !== track) title += '…';
-    ctx.fillText(title, 38, 706);
+    // 歌名（每格不同；无对应曲名时留白）
+    if (hasTitle) {
+      ctx.fillStyle = '#f2f2f2'; ctx.font = '600 30px sans-serif'; ctx.textAlign = 'left';
+      let title = track;
+      while (ctx.measureText(title).width > 500 && title.length > 2) title = title.slice(0, -2);
+      if (title !== track) title += '…';
+      ctx.fillText(title, 38, 706);
+    }
     // 进度条：进度与时长按曲目序号确定性变化
     const total = 172 + ((i * 47) % 118);            // 2:52 ~ 4:50
     const frac = 0.12 + ((i * 149) % 60) / 100;      // 12% ~ 71%
@@ -800,10 +807,11 @@ void main()
         (vUv.y - ${HOLE_UV.v0.toFixed(5)}) / ${HOLE_UV.h.toFixed(5)}
     );
     artUV = clamp(artUV, 0., 1.);
+    vec2 artAtlasUV = vec2(artUV.x, (uCells - 1. - vCell + artUV.y) / uCells);
 
     vec4 color = texel.b < 0.02
-        ? texture2D(uCover, artUV)                  // 挖孔区：封面
-        : texel + texture2D(uBlurry, artUV) * 0.8;  // 卡体：叠加封面模糊光晕
+        ? texture2D(uCover, artAtlasUV)                  // 挖孔区：该格的歌曲照片/封面
+        : texel + texture2D(uBlurry, artAtlasUV) * 0.8;  // 卡体：叠加对应图的模糊光晕
 
     color.a *= vVisibility;
     color.rgb = min(color.rgb, vec3(1.));
@@ -812,7 +820,8 @@ void main()
 `;
 
 class PlayerField {
-  constructor({ scene, sizes, album }) {
+  constructor({ scene, sizes, album, gallery = [] }) {
+    this.gallery = gallery;
     this.scene = scene;
     this.sizes = sizes;
     this.active = true;
@@ -830,29 +839,48 @@ class PlayerField {
     window.addEventListener('wheel', this.onWheelBound, { passive: true });
   }
 
-  /* 封面居中裁方 + 模糊光晕版 */
+  /* 每格一张图：歌曲照片（无照片集则用专辑封面），居中裁方 + 逐格模糊光晕 */
   createTextures(album) {
     const CELL = 512;
-    const img = album.img;
-    const side = Math.min(img.width, img.height);
-    const sx = (img.width - side) / 2, sy = (img.height - side) / 2;
+    const arts = this.gallery.length ? this.gallery : [album.img];
+    const tracks = album.tracks || [''];
+    // 卡格数：有照片集按照片数；否则按曲目数
+    const n = this.gallery.length ? arts.length : Math.max(1, tracks.length);
+    // 歌名：数量对得上才逐格印（照片集与曲目数不一致时留白，避免张冠李戴）
+    const titles = Array.from({ length: n }, (_, i) =>
+      (this.gallery.length && arts.length !== tracks.length) ? null : tracks[i % tracks.length]
+    );
+
+    const crop = (img) => {
+      const c = document.createElement('canvas');
+      c.width = c.height = CELL;
+      const side = Math.min(img.width, img.height);
+      c.getContext('2d').drawImage(img, (img.width - side) / 2, (img.height - side) / 2, side, side, 0, 0, CELL, CELL);
+      return c;
+    };
 
     const cover = document.createElement('canvas');
-    cover.width = cover.height = CELL;
-    cover.getContext('2d').drawImage(img, sx, sy, side, side, 0, 0, CELL, CELL);
+    cover.width = CELL; cover.height = CELL * n;
+    const cctx = cover.getContext('2d');
+    const blurry = document.createElement('canvas');
+    blurry.width = CELL; blurry.height = CELL * n;
+    const bctx = blurry.getContext('2d');
+    for (let i = 0; i < n; i++) {
+      const cell = crop(arts[i % arts.length]);
+      cctx.drawImage(cell, 0, i * CELL);
+      bctx.save();
+      bctx.beginPath(); bctx.rect(0, i * CELL, CELL, CELL); bctx.clip();   // 防止模糊渗到相邻格
+      bctx.filter = 'blur(60px)';
+      bctx.drawImage(cell, 0, i * CELL);
+      bctx.restore();
+    }
     this.coverTexture = new THREE.Texture(cover);
     this.coverTexture.colorSpace = THREE.SRGBColorSpace;
     this.coverTexture.needsUpdate = true;
-
-    const blurry = document.createElement('canvas');
-    blurry.width = blurry.height = CELL;
-    const bctx = blurry.getContext('2d');
-    bctx.filter = 'blur(60px)';
-    bctx.drawImage(cover, 0, 0);
     this.blurryTexture = new THREE.Texture(blurry);
     this.blurryTexture.needsUpdate = true;
 
-    const wrapper = drawPlayerCards(album.tracks || ['']);
+    const wrapper = drawPlayerCards(titles);
     this.cellCount = wrapper.count;
     this.wrapperTexture = new THREE.Texture(wrapper.canvas);
     this.wrapperTexture.needsUpdate = true;
@@ -1018,15 +1046,30 @@ class Canvas {
     this.renderer.setSize(this.dimensions.width, this.dimensions.height);
   }
 
-  /* 点开轮盘中间的专辑：进入播放器卡片场 */
+  /* 点开轮盘中间的专辑：先加载歌曲照片集（若有），再进入播放器卡片场 */
   openAlbum(album) {
+    if (this.field || this.loadingField) return;
+    this.loadingField = true;
+    const urls = Array.from({ length: album.galleryN || 0 }, (_, i) => gallerySrc(album, i));
+    Promise.all(urls.map((u) => new Promise((res) => {
+      const im = new Image();
+      im.onload = () => res(im);
+      im.onerror = () => res(null);       // 缺图跳过
+      im.src = u;
+    }))).then((imgs) => {
+      this.loadingField = false;
+      this.startField(album, imgs.filter(Boolean));
+    });
+  }
+
+  startField(album, gallery) {
     if (this.field) return;
     // 开场的书页网格不再需要，让出画布
     if (this.magazine?.instancedMesh) {
       this.scene.remove(this.magazine.instancedMesh);
       this.magazine.instancedMesh = null;
     }
-    this.field = new PlayerField({ scene: this.scene, sizes: this.sizes, album });
+    this.field = new PlayerField({ scene: this.scene, sizes: this.sizes, album, gallery });
     this.field.bindDrag(this.element);
 
     const view = document.getElementById('album-view');
