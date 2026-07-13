@@ -8,21 +8,22 @@ import * as THREE from '../assets/vendor/three.module.min.js';
 
 /* ---------- 页面素材：13 张专辑封面 ---------- */
 
-const COVERS = [
-  'growing-up.jpeg',            // Growing Up (2009)
-  'last-fantasy.jpeg',          // Last Fantasy (2011)
-  'spring-of-twenty.jpeg',      // 스무 살의 봄 (2012)
-  'modern-times.jpeg',          // Modern Times (2013)
-  'modern-times-epilogue.jpeg', // Modern Times – Epilogue (2013)
-  'flower-bookmark.jpeg',       // 꽃갈피 (2014)
-  'chat-shire.jpg',             // CHAT-SHIRE (2015)
-  'flower-bookmark-2.jpeg',     // 꽃갈피 둘 (2017)
-  'love-poem.jpeg',             // Love poem (2019)
-  'celebrity.jpeg',             // Celebrity (2021)
-  'lilac.jpeg',                 // LILAC (2021)
-  'love-wins-all.jpeg',         // Love wins all (2024)
-  'the-winning.jpeg',           // The Winning (2024)
-].map((f) => 'assets/covers/' + f);
+const ALBUMS = [
+  { file: 'growing-up.jpeg',            name: 'Growing Up',              year: 2009 },
+  { file: 'last-fantasy.jpeg',          name: 'Last Fantasy',            year: 2011 },
+  { file: 'spring-of-twenty.jpeg',      name: '스무 살의 봄',              year: 2012 },
+  { file: 'modern-times.jpeg',          name: 'Modern Times',            year: 2013 },
+  { file: 'modern-times-epilogue.jpeg', name: 'Modern Times – Epilogue', year: 2013 },
+  { file: 'flower-bookmark.jpeg',       name: '꽃갈피',                    year: 2014 },
+  { file: 'chat-shire.jpg',             name: 'CHAT-SHIRE',              year: 2015 },
+  { file: 'flower-bookmark-2.jpeg',     name: '꽃갈피 둘',                 year: 2017 },
+  { file: 'love-poem.jpeg',             name: 'Love poem',               year: 2019 },
+  { file: 'celebrity.jpeg',             name: 'Celebrity',               year: 2021 },
+  { file: 'lilac.jpeg',                 name: 'LILAC',                   year: 2021 },
+  { file: 'love-wins-all.jpeg',         name: 'Love wins all',           year: 2024 },
+  { file: 'the-winning.jpeg',           name: 'The Winning',             year: 2024 },
+];
+const COVERS = ALBUMS.map((a) => 'assets/covers/' + a.file);
 
 const REDUCED_MOTION = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -201,9 +202,12 @@ function tweenUniform(uniform, from, to, duration, delay, onComplete) {
 /* ---------- 杂志 ---------- */
 
 class Magazine {
-  constructor({ scene, sizes }) {
+  constructor({ scene, sizes, onSettled }) {
     this.scene = scene;
     this.sizes = sizes;
+    this.onSettled = onSettled;        // 杂志段落结束（用户停止翻阅）后的回调
+    this.settled = false;
+    this.lastInteraction = 0;
 
     this.meshCount = 26;                            // 13 张封面 × 2 轮
     this.pageThickness = 0.01;
@@ -315,9 +319,11 @@ class Magazine {
   playIntro() {
     const u = this.material.uniforms;
     if (REDUCED_MOTION) {
+      // 减少动态：跳过书页动画，直接进入轮盘
       u.uProgress.value = 1;
       u.uSplitProgress.value = 1;
-      this.enableScroll();
+      this.settled = true;
+      this.onSettled && this.onSettled();
       return;
     }
     tweenUniform(u.uProgress, 0, 1, 5000, 0);
@@ -329,9 +335,22 @@ class Magazine {
     window.addEventListener('touchstart', this.onTouchStart.bind(this), { passive: false });
     window.addEventListener('touchmove', this.onTouchMove.bind(this), { passive: false });
     window.addEventListener('touchend', this.onTouchEnd.bind(this), { passive: false });
+
+    // 杂志段落收尾：停止翻阅 4 秒后交棒给旋转轮盘
+    this.lastInteraction = performance.now();
+    this.settleTimer = setInterval(() => {
+      if (this.settled) return;
+      if (performance.now() - this.lastInteraction > 4000) {
+        this.settled = true;
+        clearInterval(this.settleTimer);
+        this.onSettled && this.onSettled();
+      }
+    }, 300);
   }
 
   onWheel(event) {
+    if (this.settled) return;
+    this.lastInteraction = performance.now();
     let pixelY = event.deltaY;
     if (event.deltaMode === 1) pixelY *= 16;                       // 行 → 像素
     else if (event.deltaMode === 2) pixelY *= window.innerHeight;  // 页 → 像素
@@ -349,7 +368,8 @@ class Magazine {
   }
 
   onTouchMove(event) {
-    if (!this.touch.isActive) return;
+    if (!this.touch.isActive || this.settled) return;
+    this.lastInteraction = performance.now();
     event.preventDefault();
     const touch = event.touches[0];
     const deltaX = this.touch.lastX - touch.clientX;
@@ -376,6 +396,264 @@ class Magazine {
   }
 }
 
+/* ---------- 封面轮盘（承接杂志段落的「塔罗旋转」效果） ----------
+   移植自 Tarot 项目抽牌页的连续插值轮盘：rot 为连续旋转量（单位：张），
+   每张卡按 rel = i - rot 在「中间大 → 两侧虚化 → 纵深隐没」的轨道上插值；
+   拖动跟手、惯性滑行渐停、空闲时走一步停一拍地自动轮换 */
+
+class CoverRing {
+  constructor() {
+    this.rot = 0;
+    this.vel = 0;
+    this.inertia = false;
+    this.dragging = false;
+    this.snapping = false;
+    this.lastTouch = 0;
+    this.lastAuto = 0;
+    this.dirty = true;
+    this.anim = null;
+    this.loop = null;
+    this.captionKey = '';
+
+    this.VISIBLE_REL = 3;
+    this.AUTO_STEP_MS = 950;
+    this.AUTO_DWELL = 2400;
+    this.IDLE_DELAY = 2200;
+    this.FRICTION = 300;
+
+    this.buildDom();
+    this.measureGeom();
+    this.bindInput();
+    window.addEventListener('resize', () => { this.measureGeom(); this.dirty = true; });
+  }
+
+  buildDom() {
+    this.root = document.createElement('div');
+    this.root.className = 'ring';
+    this.stage = document.createElement('div');
+    this.stage.className = 'ring-stage';
+    this.cards = ALBUMS.map((album, i) => {
+      const el = document.createElement('div');
+      el.className = 'ring-card';
+      el.dataset.idx = i;
+      el.innerHTML = `<img src="${COVERS[i]}" alt="${album.name}" draggable="false" /><span class="ring-dim"></span>`;
+      this.stage.appendChild(el);
+      return { album, el, hidden: undefined };
+    });
+    this.caption = document.createElement('p');
+    this.caption.className = 'ring-caption';
+    this.root.appendChild(this.stage);
+    this.root.appendChild(this.caption);
+    document.body.appendChild(this.root);
+  }
+
+  measureGeom() {
+    const W = window.innerWidth;
+    const mobile = W < 720;
+    this.geom = {
+      x1: W * (mobile ? 0.31 : 0.21),
+      x2: W * (mobile ? 0.44 : 0.315),
+      x3: W * (mobile ? 0.48 : 0.355),
+      s1: 0.48,
+      s2: 0.62,
+      pxPerStep: W * (mobile ? 0.31 : 0.21),
+    };
+  }
+
+  /* 关键帧插值：a = [中间, 侧位, 纵深, 隐没]，r = |rel| */
+  kp(a, r) {
+    const i = Math.min(2, Math.floor(r));
+    const t = Math.min(1, r - i);
+    return a[i] + (a[i + 1] - a[i]) * t;
+  }
+
+  layout() {
+    const n = this.cards.length;
+    const g = this.geom;
+    this.cards.forEach((c, i) => {
+      let rel = (((i - this.rot) % n) + n) % n;
+      if (rel > n / 2) rel -= n;
+      const r = Math.abs(rel);
+      const el = c.el;
+      if (r > this.VISIBLE_REL) {
+        if (c.hidden !== true) { c.hidden = true; el.style.visibility = 'hidden'; }
+        return;
+      }
+      if (c.hidden !== false) { c.hidden = false; el.style.visibility = 'visible'; }
+      const sign = rel < 0 ? -1 : 1;
+      const x = sign * this.kp([0, g.x1, g.x2, g.x3], r);
+      const s = this.kp([1, g.s1, g.s2, g.s2], r);
+      const ry = sign * this.kp([0, 16, 80, 86], r);
+      const fade = Math.max(0, Math.min(1, (3.0 - r) / 0.5));
+      el.style.transform =
+        `translate(calc(-50% + ${x.toFixed(1)}px), -50%) rotateY(${ry.toFixed(2)}deg) scale(${s.toFixed(4)})`;
+      el.style.opacity = (0.97 * fade).toFixed(3);
+      el.style.zIndex = String(100 - Math.round(r * 10));
+      el.style.setProperty('--dim', this.kp([0, 0.32, 0.5, 0.66], r).toFixed(3));
+    });
+    // 底部标注跟随中间那张
+    const ci = ((Math.round(this.rot) % n) + n) % n;
+    const a = this.cards[ci].album;
+    const key = a.name + a.year;
+    if (key !== this.captionKey) {
+      this.captionKey = key;
+      this.caption.textContent = `${a.name} — ${a.year}`;
+    }
+  }
+
+  easeOutCubic(t) { return 1 - Math.pow(1 - t, 3); }
+  easeInOutCubic(t) { return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; }
+
+  animateRotTo(target, duration = 480, opts = {}) {
+    cancelAnimationFrame(this.anim);
+    this.inertia = false;
+    const from = this.rot;
+    const delta = target - from;
+    if (Math.abs(delta) < 0.001) { this.rot = target; this.snapping = false; this.dirty = true; return; }
+    this.snapping = true;
+    const t0 = performance.now();
+    const ease = opts.auto ? this.easeInOutCubic : this.easeOutCubic;
+    const tick = (now) => {
+      const t = Math.min(1, (now - t0) / duration);
+      this.rot = from + delta * ease(t);
+      this.dirty = true;
+      if (t < 1) this.anim = requestAnimationFrame(tick);
+      else {
+        this.snapping = false;
+        if (!opts.auto) this.lastTouch = performance.now();
+      }
+    };
+    this.anim = requestAnimationFrame(tick);
+  }
+
+  start() {
+    document.body.classList.add('ring-on');
+    // 发牌入场：错峰淡入
+    this.cards.forEach((c, i) => {
+      c.el.classList.add('dealing');
+      c.el.style.animationDelay = (i % 5) * 90 + 'ms';
+    });
+    setTimeout(() => this.cards.forEach((c) => c.el.classList.remove('dealing')), 1400);
+    this.lastTouch = performance.now() - this.IDLE_DELAY + 900;
+    this.startLoop();
+  }
+
+  startLoop() {
+    if (this.loop) return;
+    let last = 0;
+    const frame = (now) => {
+      const dt = last ? Math.min(50, now - last) : 0;
+      last = now;
+      if (this.inertia && dt) {
+        this.rot += this.vel * dt;
+        this.vel *= Math.exp(-dt / this.FRICTION);
+        this.dirty = true;
+        if (Math.abs(this.vel) < 0.0004) {
+          this.inertia = false;
+          this.animateRotTo(Math.round(this.rot), 360);
+        }
+      } else if (!REDUCED_MOTION) {
+        const idle = !this.dragging && !this.snapping && !this.inertia
+          && now - this.lastTouch > this.IDLE_DELAY
+          && now - this.lastAuto > this.AUTO_DWELL;
+        if (idle) {
+          this.lastAuto = now;
+          this.animateRotTo(Math.round(this.rot) + 1, this.AUTO_STEP_MS, { auto: true });
+        }
+      }
+      if (this.dirty) { this.dirty = false; this.layout(); }
+      this.loop = requestAnimationFrame(frame);
+    };
+    this.loop = requestAnimationFrame(frame);
+  }
+
+  bindInput() {
+    const area = this.root;
+    let sx = 0, lastX = 0, lastT = 0, startRot = 0, moved = 0;
+
+    area.addEventListener('pointerdown', (e) => {
+      this.dragging = true;
+      this.inertia = false;
+      cancelAnimationFrame(this.anim);
+      this.snapping = false;
+      moved = 0;
+      sx = lastX = e.clientX;
+      lastT = performance.now();
+      startRot = this.rot;
+      this.vel = 0;
+      this.lastTouch = lastT;
+      area.classList.add('grabbing');
+      area.setPointerCapture(e.pointerId);
+    });
+
+    area.addEventListener('pointermove', (e) => {
+      if (!this.dragging) return;
+      const now = performance.now();
+      const dx = e.clientX - lastX;
+      this.vel = -(dx / this.geom.pxPerStep) / Math.max(1, now - lastT);
+      lastX = e.clientX;
+      lastT = now;
+      moved = Math.max(moved, Math.abs(e.clientX - sx));
+      this.rot = startRot - (e.clientX - sx) / this.geom.pxPerStep;
+      this.lastTouch = now;
+      this.dirty = true;
+    });
+
+    const finish = (e) => {
+      if (!this.dragging) return;
+      this.dragging = false;
+      this.lastTouch = performance.now();
+      area.classList.remove('grabbing');
+      if (moved < 8) {
+        // 轻点侧边的卡：转到它
+        const hit = document.elementFromPoint(e.clientX, e.clientY);
+        const t = hit && hit.closest('.ring-card');
+        if (t) {
+          const i = Number(t.dataset.idx);
+          const n = this.cards.length;
+          let rel = (((i - this.rot) % n) + n) % n;
+          if (rel > n / 2) rel -= n;
+          if (Math.abs(rel) >= 0.5) { this.animateRotTo(this.rot + rel, 520); return; }
+        }
+        this.animateRotTo(Math.round(this.rot), 360);
+        return;
+      }
+      if (Math.abs(this.vel) > 0.0006) {
+        this.vel = Math.max(-0.02, Math.min(0.02, this.vel));
+        this.inertia = true;
+      } else {
+        this.animateRotTo(Math.round(this.rot), 360);
+      }
+    };
+    area.addEventListener('pointerup', finish);
+    area.addEventListener('pointercancel', () => {
+      this.dragging = false;
+      area.classList.remove('grabbing');
+      this.animateRotTo(Math.round(this.rot), 360);
+    });
+
+    // 滚轮：注入惯性，沿用摩擦渐停 + 吸附
+    area.addEventListener('wheel', (e) => {
+      let pixelY = e.deltaY;
+      if (e.deltaMode === 1) pixelY *= 16;
+      else if (e.deltaMode === 2) pixelY *= window.innerHeight;
+      cancelAnimationFrame(this.anim);
+      this.snapping = false;
+      this.vel = Math.max(-0.02, Math.min(0.02, this.vel + pixelY * 0.00003));
+      this.inertia = true;
+      this.lastTouch = performance.now();
+    }, { passive: true });
+
+    // 键盘可达性
+    area.tabIndex = 0;
+    area.addEventListener('keydown', (e) => {
+      this.lastTouch = performance.now();
+      if (e.key === 'ArrowLeft') { e.preventDefault(); this.animateRotTo(Math.round(this.rot) - 1); }
+      if (e.key === 'ArrowRight') { e.preventDefault(); this.animateRotTo(Math.round(this.rot) + 1); }
+    });
+  }
+}
+
 /* ---------- 画布 ---------- */
 
 class Canvas {
@@ -397,10 +675,21 @@ class Canvas {
     this.renderer.setPixelRatio(this.dimensions.pixelRatio);
 
     this.setSizes();
-    this.magazine = new Magazine({ scene: this.scene, sizes: this.sizes });
+    this.magazine = new Magazine({
+      scene: this.scene,
+      sizes: this.sizes,
+      onSettled: () => this.handoffToRing(),
+    });
 
     window.addEventListener('resize', this.onResize.bind(this));
     this.render();
+  }
+
+  /* 杂志段落结束：画布淡出，封面轮盘接棒 */
+  handoffToRing() {
+    this.ring = new CoverRing();
+    this.ring.start();                                  // body.ring-on 触发画布 CSS 淡出
+    setTimeout(() => { this.stopped = true; }, 1700);   // 淡出完成后停掉 WebGL 渲染
   }
 
   /* 相机在 z=0 平面看到的世界尺寸 */
@@ -426,6 +715,7 @@ class Canvas {
   }
 
   render() {
+    if (this.stopped) return;                 // 轮盘接管后不再排帧
     this.renderer.render(this.scene, this.camera);
     this.magazine?.render();
     requestAnimationFrame(this.render.bind(this));

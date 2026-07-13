@@ -93,6 +93,81 @@ footer {
   .f3 { grid-column-start: 7; }
 }
 
+/* ============ 封面轮盘（塔罗旋转效果，承接杂志开场） ============ */
+
+:root { --ring-card: min(320px, 42vmin); }
+
+#webgl { transition: opacity 1.5s ease; }
+body.ring-on #webgl { opacity: 0; pointer-events: none; }
+
+.ring {
+  position: fixed;
+  inset: 0;
+  z-index: 6;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 1.2s ease 0.35s;
+  touch-action: none;
+  cursor: grab;
+  perspective: 1400px;
+  outline: none;
+}
+body.ring-on .ring { opacity: 1; pointer-events: auto; }
+.ring.grabbing { cursor: grabbing; }
+
+.ring-stage {
+  position: absolute;
+  inset: 0;
+  transform-style: preserve-3d;
+}
+
+.ring-card {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: var(--ring-card);
+  aspect-ratio: 1;
+  border-radius: 6px;
+  overflow: hidden;
+  will-change: transform, opacity;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
+  user-select: none;
+}
+.ring-card img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  pointer-events: none;
+}
+.ring-dim {
+  position: absolute;
+  inset: 0;
+  background: rgb(19, 19, 19);
+  opacity: var(--dim, 0);
+  pointer-events: none;
+}
+.ring-card.dealing { animation: ring-deal 0.9s cubic-bezier(0.22, 1, 0.36, 1) backwards; }
+@keyframes ring-deal {
+  from { opacity: 0; transform: translate(-50%, -44%) scale(0.7); }
+}
+
+.ring-caption {
+  position: absolute;
+  left: 50%;
+  top: calc(50% + var(--ring-card) * 0.62);
+  transform: translateX(-50%);
+  font-size: max(0.6em, 0.8vmax);
+  letter-spacing: 0.28em;
+  color: rgba(255, 251, 235, 0.55);
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ring-card.dealing { animation: none; }
+}
+
 /* WebGL 不可用时的封面墙 */
 #fallback {
   position: fixed;
