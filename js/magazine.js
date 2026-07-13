@@ -9,11 +9,16 @@ import * as THREE from '../assets/vendor/three.module.min.js';
 
 const ALBUMS = [
   { file: 'lost-and-found.png' ,        name: 'Lost and Found',          year: 2008,
-    tracks: ['미아 Lost Child'], gallery: 'lost-and-found', galleryN: 6 },
+    tracks: ['미아 Lost Child', '가여워', '젖은 안경', '미운 오리', '기다려요', '미아 (Inst.)'],
+    gallery: 'lost-and-found', galleryN: 6 },
   { file: 'iu-im.png' ,                 name: 'IU…IM',                   year: 2009,
-    tracks: ['마쉬멜로우 Marshmallow'], gallery: 'iu-im', galleryN: 6 },
+    tracks: ['마쉬멜로우 Marshmallow', '바라보기', '졸업하는 날', '소나기', '마쉬멜로우 (Remix)', '마쉬멜로우 (Inst.)'],
+    gallery: 'iu-im', galleryN: 6 },
   { file: 'growing-up.jpeg',            name: 'Growing Up',              year: 2009,
-    tracks: ['Boo', '있잖아 Hey'], gallery: 'growing-up', galleryN: 14 },
+    tracks: ['Boo', '있잖아 Hey', '미아 (New Ver.)', '가여워', '아침 눈물', '졸업하는 날',
+             '우연한 봄', '첫사랑', '소녀의 하루', '바람의 노래', '구두 우체통', '나 어떡해',
+             'Boo (Remix)', '있잖아 (Inst.)'],
+    gallery: 'growing-up', galleryN: 14 },
   { file: 'real.png' ,                  name: 'Real',                    year: 2010,
     tracks: ['좋은 날 Good Day'] },
   { file: 'last-fantasy.jpeg',          name: 'Last Fantasy',            year: 2011,
@@ -1077,8 +1082,9 @@ class Canvas {
     const view = document.getElementById('album-view');
     view.querySelector('.av-title').textContent = album.name;
     view.querySelector('.av-meta').textContent = `IU · ${album.year}`;
-    view.querySelector('.av-tracks').innerHTML =
-      album.tracks.map((t) => `<li>${t}</li>`).join('');
+    const trackList = view.querySelector('.av-tracks');
+    trackList.innerHTML = album.tracks.map((t) => `<li>${t}</li>`).join('');
+    trackList.classList.toggle('two-col', album.tracks.length > 6);
     view.hidden = false;
     document.body.classList.add('field-on');
 

@@ -258,3 +258,10 @@ body.field-on #album-view { opacity: 1; }
   display: block;
   filter: saturate(0.95);
 }
+
+/* 曲目多的专辑：列表分两栏 */
+.av-tracks.two-col {
+  grid-template-columns: repeat(2, minmax(0, max-content));
+  column-gap: 30px;
+  font-size: 13px;
+}
