@@ -58,6 +58,8 @@ const ALBUMS = [
   { file: 'the-winning.jpeg',           name: 'The Winning',             year: 2024,
     gallery: 'the-winning', galleryN: 5,
     tracks: ['Love wins all', 'Shopper', '홀씨 Holssi', 'Shh..', '결국엔 너'] },
+  { file: 'flower-bookmark-3.jpg',      name: '꽃갈피 셋',                 year: 2025,
+    tracks: ['너에게로 또다시', '옛사랑', '가려진 시간 사이로'] },
 ];
 const COVER_SRC = {};
 ALBUMS.forEach((a) => { COVER_SRC[a.file] = 'assets/covers/' + a.file; });
