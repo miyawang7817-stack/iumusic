@@ -1102,6 +1102,7 @@ class PlayerField {
     const wrap = (a, m) => ((a % m) + m) % m;
     let best = null, bestZ = -Infinity;
     const v = new THREE.Vector3();
+    const hw = 1, hh = CARD_H / CARD_W;                      // 卡片半宽/半高（世界单位）
     for (let i = 0; i < this.meshCount; i++) {
       const ix = attr.getX(i), iy = attr.getY(i), iz = attr.getZ(i);
       const maxXo = Math.abs(ix - this.maxDisp.x), minXo = Math.abs(ix + this.maxDisp.x);
@@ -1110,14 +1111,16 @@ class PlayerField {
       const x = ix + wrap(minXo - u.uDrag.value.x + u.uTime.value * spd.getX(i), maxXo + minXo) - minXo;
       const y = iy + wrap(minYo - u.uDrag.value.y, maxYo + minYo) - minYo;
       const z = iz + wrap(u.uScrollY.value + minZo, maxZo + minZo) - minZo;
-      if (z > 5.5 || z < -25) continue;                      // 贴脸/太远的不算
+      if (z > 5.2 || z < -26) continue;                      // 贴脸/太远的不算
       v.set(x, y, z).project(this.camera);
       if (v.z > 1) continue;
       const sx = (v.x + 1) / 2 * window.innerWidth;
       const sy = (1 - v.y) / 2 * window.innerHeight;
-      const k = 1 - (z - 12) / -42;                          // 近大远小的命中半径
-      const r = 90 * Math.min(1.6, Math.max(0.4, k));
-      if (Math.hypot(sx - clientX, sy - clientY) < r && z > bestZ) {
+      // 卡片在屏幕上的真实半宽/半高（投影角点求得）
+      v.set(x + hw, y + hh, z).project(this.camera);
+      const rw = Math.abs((v.x + 1) / 2 * window.innerWidth - sx);
+      const rh = Math.abs((1 - v.y) / 2 * window.innerHeight - sy);
+      if (Math.abs(clientX - sx) < rw && Math.abs(clientY - sy) < rh && z > bestZ) {
         bestZ = z; best = i;
       }
     }
@@ -1252,6 +1255,7 @@ class Canvas {
       camera: this.camera, onPlay: (t) => playTrack(t, album, album.tracks.indexOf(t)),
     });
     activeField = this.field;
+    window.__FIELD = this.field;      // 调试/测试用
     this.field.bindDrag(this.element);
 
     const view = document.getElementById('album-view');

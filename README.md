@@ -1,42 +1,50 @@
 # 💜 IU Magazine
 
-> IU 的 15 张专辑封面:开场像一本被风掀开的书,散落后聚成可旋转的封面轮盘
+> IU 音乐视觉站:15 张专辑、113+ 张歌曲照片、点卡片即可播放
 
-打开页面:封面逐页起转、全速旋转、堆叠成摞、散成纸带亮相,随即收拢、从纸堆中扇出成一个**塔罗式旋转轮盘**——中间一张大、两侧渐次侧立虚化,自动轮换(每张停留约 1.7 秒),支持拖拽(带惯性)、滚轮、方向键,底部跟随显示专辑名与年份。
+**线上地址**:https://miyawang7817-stack.github.io/iumusic/
 
-开场着色器移植自 [J0SUKE/webgl-magazine](https://github.com/J0SUKE/webgl-magazine),整体为**零构建纯静态**实现:不需要 Node、不需要打包器,直接部署即可。
+## 🎬 体验流程
 
-## 🚀 使用
+1. **开场**——专辑封面像一本被风掀开的书:逐页起转、全速旋转、堆叠成摞、散成纸带,随即收拢
+2. **封面轮盘**——15 张专辑封面聚成可旋转的轮盘(中间大、两侧渐次侧立虚化),自动轮换,支持拖拽(带惯性)、滚轮、方向键;底部显示专辑名与年份
+3. **专辑页**——点中间的封面进入:该专辑的每首歌是一张漂浮在 3D 空间里的播放器卡片(歌曲照片 + 歌名 + 进度条),拖拽平移、滚轮向纵深无限穿行
+4. **点歌播放**——点卡片或左下曲目列表即播,播放中的卡面 ▶ 变 ⏸,右下角出现播放条(可暂停);`← BACK` 返回轮盘
 
-```bash
-# 本地预览(ES Module 需要 http 协议,不能直接双击 index.html)
-python3 -m http.server 8000
-# 访问 http://localhost:8000
-```
+## 🎵 播放逻辑(页内直接放,不跳转)
 
-### 部署
+按顺序尝试,命中即播:
 
-- **GitHub Pages**:push 到 main 后 `.github/workflows/pages.yml` 自动发布到 `gh-pages` 分支;Settings → Pages → Source 选 `gh-pages` / root
-- **Vercel**:直接导入仓库即可(已带 `vercel.json`)
+1. **本地音源**(可选):`assets/audio/<专辑目录名>/tNN.mp3|m4a|wav`,与曲目序号对应。⚠️ 版权音频请勿提交到公开仓库,本地自用即可
+2. **iTunes 官方 30 秒试听**:自动按歌名搜索,无需任何 key
+3. 都不可用时仅在右下角提示,不做任何跳转
 
 ## 📁 项目结构
 
 ```
-├── index.html                     # 页面入口(顶部/底部信息栏 + 全屏画布)
-├── css/style.css                  # 覆层版式、轮盘样式、备用封面墙
-├── js/magazine.js                 # 开场着色器动画 + 封面轮盘 + 交棒衔接
-├── assets/covers/                 # 15 张专辑封面(2008 Lost and Found → 2024 The Winning)
-└── assets/vendor/three.module.min.js   # three.js(本地 vendor,无 CDN 依赖)
+├── index.html                # 页面骨架(信息栏 / 专辑视图 / 播放条 / 画布)
+├── css/style.css             # 全部样式
+├── js/magazine.js            # 全部逻辑:开场着色器、轮盘、卡片场、点歌播放、人脸裁剪
+├── assets/covers/            # 15 张专辑封面
+│   └── tracks/<专辑>/tNN.jpg  # 各专辑歌曲照片(共 113+ 张)
+└── assets/vendor/            # three.js 本地文件(无 CDN 依赖)
 ```
 
-## 🔧 技术说明
+## ➕ 维护指南
 
-- **开场**:three.js InstancedMesh,所有页面动画在顶点着色器里按 `uProgress` 分段插值(逐页起转 → 全速旋转 → 减速堆叠 → 散开亮相),随后 `uSplitProgress` 倒放收拢
-- **纹理图集**:封面在 Canvas 里居中裁切成 512×512 方格、竖排合成一张纹理,每页取自己的 UV 区间
-- **轮盘**:DOM + CSS transform 的连续插值轨道(中间大 → 两侧侧立 → 纵深隐没),拖拽跟手、惯性渐停、空闲自动轮换;交棒时卡片从中心纸堆位置错峰扇出,与 WebGL 收拢动作交叉淡化
-- **封面容错**:预加载时缺图自动跳过,新增专辑只需把图放进 `assets/covers/` 并在 `js/magazine.js` 的 `ALBUMS` 里加一行
-- 尊重 `prefers-reduced-motion`(跳过开场直进轮盘);WebGL 不可用时退回静态封面墙
+- **加专辑**:封面放入 `assets/covers/`,在 `js/magazine.js` 顶部 `ALBUMS` 数组按年份加一行(`file/name/year/tracks`)
+- **加歌曲照片**:放入 `assets/covers/tracks/<专辑目录>/t01.jpg…`,给该专辑加 `gallery`(目录名)与 `galleryN`(张数);照片会自动做人脸居中裁剪(`FOCUS` 表由 OpenCV 预扫描生成)
+- **改曲目名**:直接改 `ALBUMS` 里的 `tracks` 数组,卡面与列表同步更新
+- **部署**:push 到 `main` → GitHub Actions 自动发布到 `gh-pages` → Pages 上线;纯静态零构建,Vercel 直接导入也行
+
+## 🔧 技术要点
+
+- 零依赖构建:three.js 本地 vendor,补间/滚轮归一化手写,直接部署
+- 开场动画全部在顶点着色器完成(InstancedMesh + 纹理图集),移植自 [J0SUKE/webgl-magazine](https://github.com/J0SUKE/webgl-magazine)
+- 专辑卡片场参照 [J0SUKE/spotify-visualiser](https://github.com/J0SUKE/spotify-visualiser):播放器卡片框架由 Canvas 程序化绘制,封面挖孔由片元着色器按格填充,远处卡片带封面色模糊光晕
+- 点卡片命中:CPU 侧复算着色器位移、投影成屏幕矩形判定,取最靠前一张
+- 尊重 `prefers-reduced-motion`;WebGL 不可用时退回静态封面墙
 
 ---
 
-*A15 · 2008 → 2025 · dlwlrma*
+*A15 · 2008 → 2025 · dlwlrma* 💜
