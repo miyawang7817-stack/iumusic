@@ -1,6 +1,6 @@
 # 💜 IU Magazine
 
-> IU 的 18 张专辑封面:开场像一本被风掀开的书,散落后聚成可旋转的封面轮盘
+> IU 的 16 张专辑封面:开场像一本被风掀开的书,散落后聚成可旋转的封面轮盘
 
 打开页面:封面逐页起转、全速旋转、堆叠成摞、散成纸带亮相,随即收拢、从纸堆中扇出成一个**塔罗式旋转轮盘**——中间一张大、两侧渐次侧立虚化,自动轮换(每张停留约 1.7 秒),支持拖拽(带惯性)、滚轮、方向键,底部跟随显示专辑名与年份。
 
@@ -25,7 +25,7 @@ python3 -m http.server 8000
 ├── index.html                     # 页面入口(顶部/底部信息栏 + 全屏画布)
 ├── css/style.css                  # 覆层版式、轮盘样式、备用封面墙
 ├── js/magazine.js                 # 开场着色器动画 + 封面轮盘 + 交棒衔接
-├── assets/covers/                 # 18 张专辑封面(2008 Lost and Found → 2024 The Winning)
+├── assets/covers/                 # 16 张专辑封面(2008 Lost and Found → 2024 The Winning)
 └── assets/vendor/three.module.min.js   # three.js(本地 vendor,无 CDN 依赖)
 ```
 
@@ -39,4 +39,4 @@ python3 -m http.server 8000
 
 ---
 
-*A18 · 2008 → 2025 · dlwlrma*
+*A16 · 2008 → 2025 · dlwlrma*
