@@ -825,7 +825,7 @@ class PlayerField {
     this.scene = scene;
     this.sizes = sizes;
     this.active = true;
-    this.meshCount = 300;
+    this.meshCount = 120;
     this.maxDisp = { x: sizes.width * 2, y: sizes.height * 2 };
     this.drag = { xCurrent: 0, xTarget: 0, yCurrent: 0, yTarget: 0, isDown: false, lastX: 0, lastY: 0 };
     this.scrollY = { target: 0, current: 0 };
@@ -848,7 +848,9 @@ class PlayerField {
     const n = this.gallery.length ? arts.length : Math.max(1, tracks.length);
     // 歌名：数量对得上才逐格印（照片集与曲目数不一致时留白，避免张冠李戴）
     const titles = Array.from({ length: n }, (_, i) =>
-      (this.gallery.length && arts.length !== tracks.length) ? null : tracks[i % tracks.length]
+      (this.gallery.length && arts.length !== tracks.length)
+        ? 'Track ' + String(i + 1).padStart(2, '0')
+        : tracks[i % tracks.length]
     );
 
     const crop = (img) => {
