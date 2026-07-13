@@ -9,21 +9,44 @@ import * as THREE from '../assets/vendor/three.module.min.js';
 /* ---------- 页面素材：13 张专辑封面 ---------- */
 
 const ALBUMS = [
+  { file: 'lost-and-found.jpeg',        name: 'Lost and Found',          year: 2008 },
+  { file: 'iu-im.jpeg',                 name: 'IU…IM',                   year: 2009 },
   { file: 'growing-up.jpeg',            name: 'Growing Up',              year: 2009 },
+  { file: 'real.jpeg',                  name: 'Real',                    year: 2010 },
   { file: 'last-fantasy.jpeg',          name: 'Last Fantasy',            year: 2011 },
   { file: 'spring-of-twenty.jpeg',      name: '스무 살의 봄',              year: 2012 },
   { file: 'modern-times.jpeg',          name: 'Modern Times',            year: 2013 },
   { file: 'modern-times-epilogue.jpeg', name: 'Modern Times – Epilogue', year: 2013 },
   { file: 'flower-bookmark.jpeg',       name: '꽃갈피',                    year: 2014 },
   { file: 'chat-shire.jpg',             name: 'CHAT-SHIRE',              year: 2015 },
+  { file: 'palette.jpeg',               name: 'Palette',                 year: 2017 },
   { file: 'flower-bookmark-2.jpeg',     name: '꽃갈피 둘',                 year: 2017 },
   { file: 'love-poem.jpeg',             name: 'Love poem',               year: 2019 },
   { file: 'celebrity.jpeg',             name: 'Celebrity',               year: 2021 },
   { file: 'lilac.jpeg',                 name: 'LILAC',                   year: 2021 },
+  { file: 'pieces.jpeg',                name: '조각집 Pieces',             year: 2021 },
   { file: 'love-wins-all.jpeg',         name: 'Love wins all',           year: 2024 },
   { file: 'the-winning.jpeg',           name: 'The Winning',             year: 2024 },
 ];
-const COVERS = ALBUMS.map((a) => 'assets/covers/' + a.file);
+const COVER_SRC = {};
+ALBUMS.forEach((a) => { COVER_SRC[a.file] = 'assets/covers/' + a.file; });
+
+// 预加载后填充：仅保留成功加载的专辑（缺图自动跳过，不影响其它封面）
+let AVAILABLE = [];            // [{ file, name, year, src, img }]
+
+function preloadCovers() {
+  return Promise.all(
+    ALBUMS.map(
+      (a) =>
+        new Promise((resolve) => {
+          const img = new Image();
+          img.onload = () => resolve({ ...a, src: COVER_SRC[a.file], img });
+          img.onerror = () => resolve(null);   // 缺图跳过
+          img.src = COVER_SRC[a.file];
+        })
+    )
+  ).then((list) => { AVAILABLE = list.filter(Boolean); });
+}
 
 const REDUCED_MOTION = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -208,7 +231,7 @@ class Magazine {
     this.onSettled = onSettled;        // 杂志段落结束后的回调
     this.settled = false;
 
-    this.meshCount = 26;                            // 13 张封面 × 2 轮
+    this.meshCount = Math.max(2, AVAILABLE.length) * 2;   // 每张封面在纸带上出现两轮
     this.pageThickness = 0.01;
     this.pageSpacing = 1;
     this.pageDimensions = { width: 2.4, height: 2.4 };   // 正方形 = 专辑封套
@@ -222,31 +245,19 @@ class Magazine {
       50, 50, 1
     );
 
-    this.ready = this.loadTextureAtlas().then(() => {
-      this.createMaterial();
-      this.createMeshes();
-      this.playIntro();
-    });
+    this.buildTextureAtlas();
+    this.createMaterial();
+    this.createMeshes();
+    this.playIntro();
   }
 
-  /* 13 张封面绘入一张竖排图集：每格 512×512，居中裁切成正方形 */
-  async loadTextureAtlas() {
-    const images = await Promise.all(
-      COVERS.map(
-        (path) =>
-          new Promise((resolve, reject) => {
-            const img = new Image();
-            img.onload = () => resolve(img);
-            img.onerror = reject;
-            img.src = path;
-          })
-      )
-    );
-
+  /* 已加载的封面绘入一张竖排图集：每格 512×512，居中裁切成正方形 */
+  buildTextureAtlas() {
+    const images = AVAILABLE.map((a) => a.img);
     const CELL = 512;
     const canvas = document.createElement('canvas');
     canvas.width = CELL;
-    canvas.height = CELL * images.length;
+    canvas.height = CELL * Math.max(1, images.length);
     const ctx = canvas.getContext('2d');
 
     this.imageInfos = images.map((img, i) => {
@@ -395,11 +406,11 @@ class CoverRing {
     this.root.className = 'ring';
     this.stage = document.createElement('div');
     this.stage.className = 'ring-stage';
-    this.cards = ALBUMS.map((album, i) => {
+    this.cards = AVAILABLE.map((album, i) => {
       const el = document.createElement('div');
       el.className = 'ring-card';
       el.dataset.idx = i;
-      el.innerHTML = `<img src="${COVERS[i]}" alt="${album.name}" draggable="false" /><span class="ring-dim"></span>`;
+      el.innerHTML = `<img src="${album.src}" alt="${album.name}" draggable="false" /><span class="ring-dim"></span>`;
       this.stage.appendChild(el);
       return { album, el, hidden: undefined };
     });
@@ -709,14 +720,21 @@ class Canvas {
   }
 }
 
-/* ---------- 启动（WebGL 不可用则退回封面墙） ---------- */
+/* ---------- 启动：先预加载封面（缺图跳过），再起 WebGL；失败退回封面墙 ---------- */
 
-try {
-  new Canvas();
-} catch (err) {
-  console.error('WebGL 初始化失败，退回封面墙：', err);
+function showFallbackWall() {
   const fb = document.getElementById('fallback');
-  fb.innerHTML = COVERS.map((src) => `<img src="${src}" alt="IU album cover" loading="lazy" />`).join('');
+  fb.innerHTML = AVAILABLE.map((a) => `<img src="${a.src}" alt="${a.name}" loading="lazy" />`).join('');
   fb.hidden = false;
   document.body.style.overflow = 'auto';
 }
+
+preloadCovers().then(() => {
+  if (!AVAILABLE.length) { showFallbackWall(); return; }   // 一张封面都没加载出来
+  try {
+    new Canvas();
+  } catch (err) {
+    console.error('WebGL 初始化失败，退回封面墙：', err);
+    showFallbackWall();
+  }
+});
