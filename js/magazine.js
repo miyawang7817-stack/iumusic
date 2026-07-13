@@ -830,8 +830,8 @@ class PlayerField {
     this.scene = scene;
     this.sizes = sizes;
     this.active = true;
-    this.meshCount = 120;
-    this.maxDisp = { x: sizes.width * 2, y: sizes.height * 2 };
+    this.meshCount = 70;
+    this.maxDisp = { x: sizes.width * 2.4, y: sizes.height * 2.4 };
     this.drag = { xCurrent: 0, xTarget: 0, yCurrent: 0, yTarget: 0, isDown: false, lastX: 0, lastY: 0 };
     this.scrollY = { target: 0, current: 0 };
 
