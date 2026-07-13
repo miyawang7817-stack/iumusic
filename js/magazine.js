@@ -39,8 +39,6 @@ const ALBUMS = [
     tracks: ['Love poem', 'Blueming', 'unlucky', '시간의 바깥'] },
   { file: 'lilac.jpeg',                 name: 'LILAC',                   year: 2021,
     tracks: ['라일락 LILAC', 'Celebrity', 'Coin', '아이와 나의 바다 My Sea', '에필로그 Epilogue'] },
-  { file: 'pieces.png' ,                name: '조각집 Pieces',             year: 2021,
-    tracks: ['겨울잠 Winter Sleep', '드라마 Drama'] },
   { file: 'love-wins-all.jpeg',         name: 'Love wins all',           year: 2024,
     tracks: ['Love wins all'] },
   { file: 'the-winning.jpeg',           name: 'The Winning',             year: 2024,
