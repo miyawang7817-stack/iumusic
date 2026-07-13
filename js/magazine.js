@@ -93,7 +93,11 @@ const REDUCED_MOTION = window.matchMedia('(prefers-reduced-motion: reduce)').mat
 /* ---------- 试听：iTunes Search 30 秒官方预览；拿不到则打开 YouTube 搜索 ---------- */
 
 const player = { audio: new Audio(), title: null, cache: {} };
-player.audio.addEventListener('ended', () => setNowPlaying(null));
+let activeField = null;          // 当前专辑的卡片场（用于同步卡面播放按钮）
+player.audio.addEventListener('ended', () => {
+  setNowPlaying(null);
+  activeField?.setPlayingTitle(null);
+});
 
 function setNowPlaying(title, paused = false) {
   const bar = document.getElementById('now-playing');
@@ -118,8 +122,15 @@ async function fetchPreview(title) {
 
 async function playTrack(title) {
   if (player.title === title) {              // 再点同一首：暂停/继续
-    if (player.audio.paused) { player.audio.play().catch(() => {}); setNowPlaying(title, false); }
-    else { player.audio.pause(); setNowPlaying(title, true); }
+    if (player.audio.paused) {
+      player.audio.play().catch(() => {});
+      setNowPlaying(title, false);
+      activeField?.setPlayingTitle(title, false);
+    } else {
+      player.audio.pause();
+      setNowPlaying(title, true);
+      activeField?.setPlayingTitle(title, true);
+    }
     return;
   }
   try {
@@ -129,6 +140,7 @@ async function playTrack(title) {
     await player.audio.play();
     player.title = title;
     setNowPlaying(title);
+    activeField?.setPlayingTitle(title, false);
   } catch (_) {
     // 环境不允许外部请求（如 artifact 预览）或没找到试听：打开 YouTube 搜索
     window.open('https://www.youtube.com/results?search_query=' +
@@ -735,7 +747,7 @@ const HOLE_UV = {
 
 /* 程序化绘制播放器卡片图集：每首歌一格（歌名/进度/时长各不相同）。
    卡体 #161616（b>0.02），封面挖孔纯黑（b<0.02 触发着色器采样封面） */
-function drawPlayerCards(tracks) {
+function drawPlayerCards(tracks, playingIdx = -1) {
   const n = Math.max(1, tracks.length);
   const c = document.createElement('canvas');
   c.width = CARD_W; c.height = CARD_H * n;
@@ -787,8 +799,16 @@ function drawPlayerCards(tracks) {
     };
     const cy = 890;
     tri(172, cy, 26, 1); tri(214, cy, 26, 1);            // ⏮
-    rr(296, cy - 36, 18, 72, 6); ctx.fill();             // ⏸
-    rr(330, cy - 36, 18, 72, 6); ctx.fill();
+    if (i === playingIdx) {                              // 播放中 → ⏸
+      rr(296, cy - 36, 18, 72, 6); ctx.fill();
+      rr(330, cy - 36, 18, 72, 6); ctx.fill();
+    } else {                                             // 默认 → ▶
+      ctx.beginPath();
+      ctx.moveTo(298, cy - 36);
+      ctx.lineTo(298, cy + 36);
+      ctx.lineTo(360, cy);
+      ctx.closePath(); ctx.fill();
+    }
     tri(468, cy, 26, -1); tri(426, cy, 26, -1);          // ⏭
     // 音量条
     ctx.fillStyle = '#4d4d4d'; rr(120, 1004, 400, 5, 2.5); ctx.fill();
@@ -954,9 +974,17 @@ class PlayerField {
     this.blurryTexture = new THREE.Texture(blurry);
     this.blurryTexture.needsUpdate = true;
 
+    this.titles = titles;
     const wrapper = drawPlayerCards(titles);
     this.cellCount = wrapper.count;
     this.wrapperTexture = new THREE.Texture(wrapper.canvas);
+    this.wrapperTexture.needsUpdate = true;
+  }
+
+  /* 播放状态变化时重绘卡面：播放中的那首显示 ⏸，其余 ▶ */
+  setPlayingTitle(title, paused = false) {
+    const idx = (!title || paused) ? -1 : this.titles.indexOf(title);
+    this.wrapperTexture.image = drawPlayerCards(this.titles, idx).canvas;
     this.wrapperTexture.needsUpdate = true;
   }
 
@@ -1190,6 +1218,7 @@ class Canvas {
       scene: this.scene, sizes: this.sizes, album, gallery,
       camera: this.camera, onPlay: (t) => playTrack(t),
     });
+    activeField = this.field;
     this.field.bindDrag(this.element);
 
     const view = document.getElementById('album-view');
@@ -1211,7 +1240,9 @@ class Canvas {
   closeAlbum() {
     if (!this.field) return;
     player.audio.pause();
+    player.title = null;
     setNowPlaying(null);
+    activeField = null;
     this.field.active = false;
     document.body.classList.remove('field-on');
     const view = document.getElementById('album-view');
