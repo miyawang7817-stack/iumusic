@@ -205,9 +205,8 @@ class Magazine {
   constructor({ scene, sizes, onSettled }) {
     this.scene = scene;
     this.sizes = sizes;
-    this.onSettled = onSettled;        // 杂志段落结束（用户停止翻阅）后的回调
+    this.onSettled = onSettled;        // 杂志段落结束后的回调
     this.settled = false;
-    this.lastInteraction = 0;
 
     this.meshCount = 26;                            // 13 张封面 × 2 轮
     this.pageThickness = 0.01;
@@ -215,7 +214,6 @@ class Magazine {
     this.pageDimensions = { width: 2.4, height: 2.4 };   // 正方形 = 专辑封套
 
     this.scrollY = { target: 0, current: 0 };
-    this.touch = { startX: 0, lastX: 0, isActive: false };
 
     this.geometry = new THREE.BoxGeometry(
       this.pageDimensions.width,
@@ -327,61 +325,13 @@ class Magazine {
       return;
     }
     tweenUniform(u.uProgress, 0, 1, 5000, 0);
-    tweenUniform(u.uSplitProgress, 0, 1, 1000, 4400, () => this.enableScroll());
-  }
-
-  enableScroll() {
-    window.addEventListener('wheel', this.onWheel.bind(this), { passive: true });
-    window.addEventListener('touchstart', this.onTouchStart.bind(this), { passive: false });
-    window.addEventListener('touchmove', this.onTouchMove.bind(this), { passive: false });
-    window.addEventListener('touchend', this.onTouchEnd.bind(this), { passive: false });
-
-    // 杂志段落收尾：停止翻阅 4 秒后交棒给旋转轮盘
-    this.lastInteraction = performance.now();
-    this.settleTimer = setInterval(() => {
-      if (this.settled) return;
-      if (performance.now() - this.lastInteraction > 4000) {
+    tweenUniform(u.uSplitProgress, 0, 1, 1000, 4400, () => {
+      // 纸带亮相一瞬，直接收拢交棒给轮盘
+      setTimeout(() => {
         this.settled = true;
-        clearInterval(this.settleTimer);
         this.onSettled && this.onSettled();
-      }
-    }, 300);
-  }
-
-  onWheel(event) {
-    if (this.settled) return;
-    this.lastInteraction = performance.now();
-    let pixelY = event.deltaY;
-    if (event.deltaMode === 1) pixelY *= 16;                       // 行 → 像素
-    else if (event.deltaMode === 2) pixelY *= window.innerHeight;  // 页 → 像素
-    const scrollY = (pixelY * this.sizes.height) / window.innerHeight;
-    this.scrollY.target += scrollY;
-    this.material.uniforms.uSpeedY.value += scrollY;
-  }
-
-  onTouchStart(event) {
-    event.preventDefault();
-    const touch = event.touches[0];
-    this.touch.startX = touch.clientX;
-    this.touch.lastX = touch.clientX;
-    this.touch.isActive = true;
-  }
-
-  onTouchMove(event) {
-    if (!this.touch.isActive || this.settled) return;
-    this.lastInteraction = performance.now();
-    event.preventDefault();
-    const touch = event.touches[0];
-    const deltaX = this.touch.lastX - touch.clientX;
-    const scrollY = ((deltaX * this.sizes.height) / window.innerHeight) * 2;
-    this.scrollY.target += scrollY;
-    this.material.uniforms.uSpeedY.value += scrollY;
-    this.touch.lastX = touch.clientX;
-  }
-
-  onTouchEnd(event) {
-    event.preventDefault();
-    this.touch.isActive = false;
+      }, 350);
+    });
   }
 
   onResize(sizes) {
