@@ -9,22 +9,22 @@ import * as THREE from '../assets/vendor/three.module.min.js';
 /* ---------- 页面素材：13 张专辑封面 ---------- */
 
 const ALBUMS = [
-  { file: 'lost-and-found.jpeg',        name: 'Lost and Found',          year: 2008 },
-  { file: 'iu-im.jpeg',                 name: 'IU…IM',                   year: 2009 },
+  { file: 'lost-and-found.png' ,        name: 'Lost and Found',          year: 2008 },
+  { file: 'iu-im.png' ,                 name: 'IU…IM',                   year: 2009 },
   { file: 'growing-up.jpeg',            name: 'Growing Up',              year: 2009 },
-  { file: 'real.jpeg',                  name: 'Real',                    year: 2010 },
+  { file: 'real.png' ,                  name: 'Real',                    year: 2010 },
   { file: 'last-fantasy.jpeg',          name: 'Last Fantasy',            year: 2011 },
   { file: 'spring-of-twenty.jpeg',      name: '스무 살의 봄',              year: 2012 },
   { file: 'modern-times.jpeg',          name: 'Modern Times',            year: 2013 },
   { file: 'modern-times-epilogue.jpeg', name: 'Modern Times – Epilogue', year: 2013 },
   { file: 'flower-bookmark.jpeg',       name: '꽃갈피',                    year: 2014 },
   { file: 'chat-shire.jpg',             name: 'CHAT-SHIRE',              year: 2015 },
-  { file: 'palette.jpeg',               name: 'Palette',                 year: 2017 },
+  { file: 'palette.png' ,               name: 'Palette',                 year: 2017 },
   { file: 'flower-bookmark-2.jpeg',     name: '꽃갈피 둘',                 year: 2017 },
   { file: 'love-poem.jpeg',             name: 'Love poem',               year: 2019 },
   { file: 'celebrity.jpeg',             name: 'Celebrity',               year: 2021 },
   { file: 'lilac.jpeg',                 name: 'LILAC',                   year: 2021 },
-  { file: 'pieces.jpeg',                name: '조각집 Pieces',             year: 2021 },
+  { file: 'pieces.png' ,                name: '조각집 Pieces',             year: 2021 },
   { file: 'love-wins-all.jpeg',         name: 'Love wins all',           year: 2024 },
   { file: 'the-winning.jpeg',           name: 'The Winning',             year: 2024 },
 ];
@@ -390,9 +390,9 @@ class CoverRing {
     this.captionKey = '';
 
     this.VISIBLE_REL = 3;
-    this.AUTO_STEP_MS = 950;
-    this.AUTO_DWELL = 2400;
-    this.IDLE_DELAY = 2200;
+    this.AUTO_STEP_MS = 600;
+    this.AUTO_DWELL = 1100;
+    this.IDLE_DELAY = 1500;
     this.FRICTION = 300;
 
     this.buildDom();
