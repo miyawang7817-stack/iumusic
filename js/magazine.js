@@ -39,10 +39,8 @@ const ALBUMS = [
     tracks: ['Love poem', 'Blueming', 'unlucky', '시간의 바깥'] },
   { file: 'lilac.jpeg',                 name: 'LILAC',                   year: 2021,
     tracks: ['라일락 LILAC', 'Celebrity', 'Coin', '아이와 나의 바다 My Sea', '에필로그 Epilogue'] },
-  { file: 'love-wins-all.jpeg',         name: 'Love wins all',           year: 2024,
-    tracks: ['Love wins all'] },
   { file: 'the-winning.jpeg',           name: 'The Winning',             year: 2024,
-    tracks: ['Shopper', '홀씨 Holssi', 'Shh..'] },
+    tracks: ['Love wins all', 'Shopper', '홀씨 Holssi', 'Shh..'] },
 ];
 const COVER_SRC = {};
 ALBUMS.forEach((a) => { COVER_SRC[a.file] = 'assets/covers/' + a.file; });
