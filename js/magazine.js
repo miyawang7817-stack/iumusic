@@ -664,10 +664,12 @@ const HOLE_UV = {
   h:  HOLE.size / CARD_H,
 };
 
-/* 程序化绘制播放器卡片框架：车体 #161616（b>0.02），封面挖孔纯黑（b<0.02 触发着色器采样封面） */
-function drawPlayerCard() {
+/* 程序化绘制播放器卡片图集：每首歌一格（歌名/进度/时长各不相同）。
+   卡体 #161616（b>0.02），封面挖孔纯黑（b<0.02 触发着色器采样封面） */
+function drawPlayerCards(tracks) {
+  const n = Math.max(1, tracks.length);
   const c = document.createElement('canvas');
-  c.width = CARD_W; c.height = CARD_H;
+  c.width = CARD_W; c.height = CARD_H * n;
   const ctx = c.getContext('2d');
   const rr = (x, y, w, h, r) => {
     ctx.beginPath();
@@ -678,43 +680,59 @@ function drawPlayerCard() {
     ctx.arcTo(x, y, x + w, y, r);
     ctx.closePath();
   };
-  // 卡体
-  rr(0, 0, CARD_W, CARD_H, 52); ctx.fillStyle = '#161616'; ctx.fill();
-  // 顶部提手
-  rr(CARD_W / 2 - 70, 20, 140, 10, 5); ctx.fillStyle = '#e8e8e8'; ctx.fill();
-  // 封面挖孔（纯黑 = 着色器里替换成封面）
-  rr(HOLE.x, HOLE.y, HOLE.size, HOLE.size, 28); ctx.fillStyle = '#000'; ctx.fill();
-  // 进度条
-  rr(38, 742, 564, 6, 3); ctx.fillStyle = '#4d4d4d'; ctx.fill();
-  rr(38, 742, 92, 6, 3); ctx.fillStyle = '#ffffff'; ctx.fill();
-  ctx.fillStyle = '#c9c9c9'; ctx.font = '26px sans-serif';
-  ctx.textAlign = 'left';  ctx.fillText('0:10', 38, 798);
-  ctx.textAlign = 'right'; ctx.fillText('-3:36', 602, 798);
-  // 控制键：上一首 / 暂停 / 下一首
-  ctx.fillStyle = '#fff';
-  const tri = (cx, cy, s, dir) => {
-    ctx.beginPath();
-    ctx.moveTo(cx + dir * s, cy - s * 0.8);
-    ctx.lineTo(cx + dir * s, cy + s * 0.8);
-    ctx.lineTo(cx - dir * s, cy);
-    ctx.closePath(); ctx.fill();
-  };
-  const cy = 890;
-  tri(172, cy, 26, 1); tri(214, cy, 26, 1);            // ⏮（双三角向左）
-  rr(296, cy - 36, 18, 72, 6); ctx.fill();             // ⏸
-  rr(330, cy - 36, 18, 72, 6); ctx.fill();
-  tri(468, cy, 26, -1); tri(426, cy, 26, -1);          // ⏭
-  // 音量条
-  ctx.fillStyle = '#4d4d4d'; rr(120, 1004, 400, 5, 2.5); ctx.fill();
-  ctx.beginPath(); ctx.moveTo(78, 1006); ctx.lineTo(98, 992); ctx.lineTo(98, 1020); ctx.closePath();
-  ctx.fillStyle = '#c9c9c9'; ctx.fill();
-  ctx.beginPath(); ctx.arc(368, 1006, 15, 0, Math.PI * 2); ctx.fillStyle = '#fff'; ctx.fill();
-  return c;
+  const fmt = (sec) => `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, '0')}`;
+
+  tracks.forEach((track, i) => {
+    ctx.save();
+    ctx.translate(0, CARD_H * i);
+    // 卡体 + 顶部提手
+    rr(0, 0, CARD_W, CARD_H, 52); ctx.fillStyle = '#161616'; ctx.fill();
+    rr(CARD_W / 2 - 70, 20, 140, 10, 5); ctx.fillStyle = '#e8e8e8'; ctx.fill();
+    // 封面挖孔（纯黑 = 着色器里替换成封面）
+    rr(HOLE.x, HOLE.y, HOLE.size, HOLE.size, 28); ctx.fillStyle = '#000'; ctx.fill();
+    // 歌名（每格不同）
+    ctx.fillStyle = '#f2f2f2'; ctx.font = '600 30px sans-serif'; ctx.textAlign = 'left';
+    let title = track;
+    while (ctx.measureText(title).width > 500 && title.length > 2) title = title.slice(0, -2);
+    if (title !== track) title += '…';
+    ctx.fillText(title, 38, 706);
+    // 进度条：进度与时长按曲目序号确定性变化
+    const total = 172 + ((i * 47) % 118);            // 2:52 ~ 4:50
+    const frac = 0.12 + ((i * 149) % 60) / 100;      // 12% ~ 71%
+    rr(38, 742, 564, 6, 3); ctx.fillStyle = '#4d4d4d'; ctx.fill();
+    rr(38, 742, Math.round(564 * frac), 6, 3); ctx.fillStyle = '#ffffff'; ctx.fill();
+    ctx.fillStyle = '#c9c9c9'; ctx.font = '26px sans-serif';
+    ctx.textAlign = 'left';  ctx.fillText(fmt(total * frac), 38, 798);
+    ctx.textAlign = 'right'; ctx.fillText('-' + fmt(total * (1 - frac)), 602, 798);
+    // 控制键：上一首 / 暂停 / 下一首
+    ctx.fillStyle = '#fff';
+    const tri = (cx, cy, s, dir) => {
+      ctx.beginPath();
+      ctx.moveTo(cx + dir * s, cy - s * 0.8);
+      ctx.lineTo(cx + dir * s, cy + s * 0.8);
+      ctx.lineTo(cx - dir * s, cy);
+      ctx.closePath(); ctx.fill();
+    };
+    const cy = 890;
+    tri(172, cy, 26, 1); tri(214, cy, 26, 1);            // ⏮
+    rr(296, cy - 36, 18, 72, 6); ctx.fill();             // ⏸
+    rr(330, cy - 36, 18, 72, 6); ctx.fill();
+    tri(468, cy, 26, -1); tri(426, cy, 26, -1);          // ⏭
+    // 音量条
+    ctx.fillStyle = '#4d4d4d'; rr(120, 1004, 400, 5, 2.5); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(78, 1006); ctx.lineTo(98, 992); ctx.lineTo(98, 1020); ctx.closePath();
+    ctx.fillStyle = '#c9c9c9'; ctx.fill();
+    ctx.beginPath(); ctx.arc(368, 1006, 15, 0, Math.PI * 2); ctx.fillStyle = '#fff'; ctx.fill();
+    ctx.restore();
+  });
+  return { canvas: c, count: n };
 }
 
 const fieldVertexShader = /* glsl */ `
 attribute vec3 aInitialPosition;
 attribute float aMeshSpeed;
+attribute float aCell;
+varying float vCell;
 
 uniform float uTime;
 uniform vec2 uMaxDisp;
@@ -757,20 +775,24 @@ void main()
 
     gl_Position = projectionMatrix * viewMatrix * modelMatrix * instanceMatrix * vec4(newPosition, 1.0);
     vUv = uv;
+    vCell = aCell;
 }
 `;
 
 const fieldFragmentShader = /* glsl */ `
 varying vec2 vUv;
 varying float vVisibility;
+varying float vCell;
 
 uniform sampler2D uWrapper;
 uniform sampler2D uCover;
 uniform sampler2D uBlurry;
+uniform float uCells;
 
 void main()
 {
-    vec4 texel = texture2D(uWrapper, vUv);
+    vec2 wrapperUV = vec2(vUv.x, (uCells - 1. - vCell + vUv.y) / uCells);
+    vec4 texel = texture2D(uWrapper, wrapperUV);
     if (texel.a < 0.01) discard;
 
     vec2 artUV = vec2(
@@ -830,7 +852,9 @@ class PlayerField {
     this.blurryTexture = new THREE.Texture(blurry);
     this.blurryTexture.needsUpdate = true;
 
-    this.wrapperTexture = new THREE.Texture(drawPlayerCard());
+    const wrapper = drawPlayerCards(album.tracks || ['']);
+    this.cellCount = wrapper.count;
+    this.wrapperTexture = new THREE.Texture(wrapper.canvas);
     this.wrapperTexture.needsUpdate = true;
   }
 
@@ -844,6 +868,7 @@ class PlayerField {
         uMaxDisp: { value: new THREE.Vector2(this.maxDisp.x, this.maxDisp.y) },
         uDrag: { value: new THREE.Vector2(0, 0) },
         uScrollY: { value: 0 },
+        uCells: { value: this.cellCount },
         uWrapper: new THREE.Uniform(this.wrapperTexture),
         uCover: new THREE.Uniform(this.coverTexture),
         uBlurry: new THREE.Uniform(this.blurryTexture),
@@ -855,14 +880,17 @@ class PlayerField {
     this.mesh = new THREE.InstancedMesh(this.geometry, this.material, this.meshCount);
     const initialPosition = new Float32Array(this.meshCount * 3);
     const meshSpeed = new Float32Array(this.meshCount);
+    const cell = new Float32Array(this.meshCount);
     for (let i = 0; i < this.meshCount; i++) {
       initialPosition[i * 3 + 0] = (Math.random() - 0.5) * this.maxDisp.x * 2;
       initialPosition[i * 3 + 1] = (Math.random() - 0.5) * this.maxDisp.y * 2;
       initialPosition[i * 3 + 2] = Math.random() * (7 - -30) - 30;
       meshSpeed[i] = Math.random() * 0.5 + 0.5;
+      cell[i] = i % this.cellCount;                  // 每张卡对应专辑里的一首歌
     }
     this.geometry.setAttribute('aInitialPosition', new THREE.InstancedBufferAttribute(initialPosition, 3));
     this.geometry.setAttribute('aMeshSpeed', new THREE.InstancedBufferAttribute(meshSpeed, 1));
+    this.geometry.setAttribute('aCell', new THREE.InstancedBufferAttribute(cell, 1));
     this.scene.add(this.mesh);
   }
 
@@ -901,7 +929,8 @@ class PlayerField {
   }
 
   render(delta) {
-    this.material.uniforms.uTime.value += delta * 0.015;
+    const nd = delta / (1000 / 60);          // 毫秒 → 归一化帧（60fps ≈ 1.0）
+    this.material.uniforms.uTime.value += nd * 0.015;
     this.drag.xCurrent += (this.drag.xTarget - this.drag.xCurrent) * 0.1;
     this.drag.yCurrent += (this.drag.yTarget - this.drag.yCurrent) * 0.1;
     this.material.uniforms.uDrag.value.set(this.drag.xCurrent, this.drag.yCurrent);
