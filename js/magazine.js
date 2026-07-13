@@ -388,10 +388,23 @@ class Magazine {
     this.sizes = sizes;
   }
 
+  /* 收拢：纸带滑回原位并合拢成一摞（散开动画的倒放），为轮盘交棒做衔接 */
+  gather(duration) {
+    const u = this.material.uniforms;
+    this.gathering = true;
+    const period = this.meshCount * (this.pageSpacing + this.pageThickness);
+    const snapped = Math.round(u.uScrollY.value / period) * period;
+    this.scrollY.current = this.scrollY.target = snapped;
+    tweenUniform(u.uScrollY, u.uScrollY.value, snapped, duration, 0);
+    tweenUniform(u.uSplitProgress, u.uSplitProgress.value, 0, duration, 0);
+  }
+
   render() {
     if (!this.material) return;
-    this.scrollY.current = lerp(this.scrollY.current, this.scrollY.target, 0.12);
-    this.material.uniforms.uScrollY.value = this.scrollY.current;
+    if (!this.gathering) {
+      this.scrollY.current = lerp(this.scrollY.current, this.scrollY.target, 0.12);
+      this.material.uniforms.uScrollY.value = this.scrollY.current;
+    }
     this.material.uniforms.uSpeedY.value *= 0.835;    // 波浪随速度衰减回平
   }
 }
@@ -527,15 +540,34 @@ class CoverRing {
   }
 
   start() {
-    document.body.classList.add('ring-on');
-    // 发牌入场：错峰淡入
+    // 入场：所有可见卡先堆在屏幕中心（接住 WebGL 里刚收拢的纸堆），再扇出到轨道位置
+    const n = this.cards.length;
     this.cards.forEach((c, i) => {
-      c.el.classList.add('dealing');
-      c.el.style.animationDelay = (i % 5) * 90 + 'ms';
+      let rel = (((i - this.rot) % n) + n) % n;
+      if (rel > n / 2) rel -= n;
+      const r = Math.abs(rel);
+      const el = c.el;
+      if (r > this.VISIBLE_REL) {
+        c.hidden = true;
+        el.style.visibility = 'hidden';
+        return;
+      }
+      c.hidden = false;
+      el.style.transform = 'translate(-50%, -50%) rotateX(26deg) scale(0.8)';
+      el.style.opacity = '0';
+      el.style.zIndex = String(100 - Math.round(r * 10));
+      el.style.setProperty('--dim', '0');
+      el.style.setProperty('--deal-delay', Math.round(r * 110) + 'ms');
     });
-    setTimeout(() => this.cards.forEach((c) => c.el.classList.remove('dealing')), 1400);
-    this.lastTouch = performance.now() - this.IDLE_DELAY + 900;
-    this.startLoop();
+    document.body.classList.add('ring-on');
+    this.stage.classList.add('enter');
+    // 双 rAF：确保初始堆叠状态先渲染一帧，随后的 layout() 走 transition 扇出
+    requestAnimationFrame(() => requestAnimationFrame(() => this.layout()));
+    setTimeout(() => {
+      this.stage.classList.remove('enter');
+      this.lastTouch = performance.now();     // 落定后先稳一拍，再开始自动轮换
+      this.startLoop();
+    }, 1600);
   }
 
   startLoop() {
@@ -685,11 +717,16 @@ class Canvas {
     this.render();
   }
 
-  /* 杂志段落结束：画布淡出，封面轮盘接棒 */
+  /* 杂志段落结束：纸带收拢成一摞 → 交叉淡化 → 轮盘从中心扇出接棒 */
   handoffToRing() {
+    const GATHER_MS = 1050;
+    this.magazine.gather(GATHER_MS);
     this.ring = new CoverRing();
-    this.ring.start();                                  // body.ring-on 触发画布 CSS 淡出
-    setTimeout(() => { this.stopped = true; }, 1700);   // 淡出完成后停掉 WebGL 渲染
+    // 纸堆基本合拢时开始交棒：画布淡出与轮盘扇出交叠进行
+    setTimeout(() => {
+      this.ring.start();                                // body.ring-on 触发画布 CSS 淡出
+      setTimeout(() => { this.stopped = true; }, 1300); // 淡出完成后停掉 WebGL 渲染
+    }, GATHER_MS - 250);
   }
 
   /* 相机在 z=0 平面看到的世界尺寸 */

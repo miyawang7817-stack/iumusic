@@ -97,7 +97,7 @@ footer {
 
 :root { --ring-card: min(320px, 42vmin); }
 
-#webgl { transition: opacity 1.5s ease; }
+#webgl { transition: opacity 0.9s ease; }
 body.ring-on #webgl { opacity: 0; pointer-events: none; }
 
 .ring {
@@ -106,7 +106,7 @@ body.ring-on #webgl { opacity: 0; pointer-events: none; }
   z-index: 6;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 1.2s ease 0.35s;
+  transition: opacity 0.5s ease;
   touch-action: none;
   cursor: grab;
   perspective: 1400px;
@@ -147,9 +147,11 @@ body.ring-on .ring { opacity: 1; pointer-events: auto; }
   opacity: var(--dim, 0);
   pointer-events: none;
 }
-.ring-card.dealing { animation: ring-deal 0.9s cubic-bezier(0.22, 1, 0.36, 1) backwards; }
-@keyframes ring-deal {
-  from { opacity: 0; transform: translate(-50%, -44%) scale(0.7); }
+/* 入场扇出：从中心纸堆位置沿 transition 滑到各自轨道位置，按距离错峰 */
+.ring-stage.enter .ring-card {
+  transition:
+    transform 1000ms cubic-bezier(0.22, 1, 0.36, 1) var(--deal-delay, 0ms),
+    opacity 620ms ease var(--deal-delay, 0ms);
 }
 
 .ring-caption {
@@ -162,10 +164,14 @@ body.ring-on .ring { opacity: 1; pointer-events: auto; }
   color: rgba(255, 251, 235, 0.55);
   white-space: nowrap;
   pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.8s ease 1.15s;    /* 扇出落定后再浮现 */
 }
+body.ring-on .ring-caption { opacity: 1; }
 
 @media (prefers-reduced-motion: reduce) {
-  .ring-card.dealing { animation: none; }
+  .ring-stage.enter .ring-card { transition: none; }
+  .ring-caption { transition-delay: 0s; }
 }
 
 /* WebGL 不可用时的封面墙 */
