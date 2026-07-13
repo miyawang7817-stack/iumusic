@@ -1,8 +1,7 @@
-/* IU Magazine —— WebGL 杂志首页
-   移植自 J0SUKE/webgl-magazine（MIT 思路致敬）：
-   26 页专辑封面像一本书一样旋开、摊平、散成一条无限纵深的纸带，
-   滚轮 / 触摸滑动无限翻页，滚动速度让纸页产生波浪弯曲。
-   零构建：three.js 使用本地 vendor 模块，GSAP/lenis 以少量原生代码替代。 */
+/* IU Magazine —— WebGL 首页
+   开场（移植自 J0SUKE/webgl-magazine 的着色器）：专辑封面像一本书被风掀开、
+   全速旋转、堆叠成摞、散成纸带亮相，随即收拢，交棒给 DOM 封面轮盘（塔罗式旋转）。
+   零构建：three.js 使用本地 vendor 模块，补间用少量原生代码实现。 */
 
 import * as THREE from '../assets/vendor/three.module.min.js';
 
@@ -208,7 +207,6 @@ void main()
 /* ---------- 小工具：缓动 / 补间（替代 GSAP） ---------- */
 
 const easePower2InOut = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
-const lerp = (a, b, t) => a + (b - a) * t;
 
 // 极简补间：驱动 uniform.value 从 from 到 to
 function tweenUniform(uniform, from, to, duration, delay, onComplete) {
@@ -225,18 +223,15 @@ function tweenUniform(uniform, from, to, duration, delay, onComplete) {
 /* ---------- 杂志 ---------- */
 
 class Magazine {
-  constructor({ scene, sizes, onSettled }) {
+  constructor({ scene, onSettled }) {
     this.scene = scene;
-    this.sizes = sizes;
     this.onSettled = onSettled;        // 杂志段落结束后的回调
     this.settled = false;
 
-    this.meshCount = Math.max(2, AVAILABLE.length) * 2;   // 每张封面在纸带上出现两轮
+    this.meshCount = Math.max(2, AVAILABLE.length) * 2;   // 每张封面在开场纸带上出现两轮
     this.pageThickness = 0.01;
     this.pageSpacing = 1;
     this.pageDimensions = { width: 2.4, height: 2.4 };   // 正方形 = 专辑封套
-
-    this.scrollY = { target: 0, current: 0 };
 
     this.geometry = new THREE.BoxGeometry(
       this.pageDimensions.width,
@@ -345,28 +340,10 @@ class Magazine {
     });
   }
 
-  onResize(sizes) {
-    this.sizes = sizes;
-  }
-
-  /* 收拢：纸带滑回原位并合拢成一摞（散开动画的倒放），为轮盘交棒做衔接 */
+  /* 收拢：纸带合拢成一摞（散开动画的倒放），为轮盘交棒做衔接 */
   gather(duration) {
     const u = this.material.uniforms;
-    this.gathering = true;
-    const period = this.meshCount * (this.pageSpacing + this.pageThickness);
-    const snapped = Math.round(u.uScrollY.value / period) * period;
-    this.scrollY.current = this.scrollY.target = snapped;
-    tweenUniform(u.uScrollY, u.uScrollY.value, snapped, duration, 0);
     tweenUniform(u.uSplitProgress, u.uSplitProgress.value, 0, duration, 0);
-  }
-
-  render() {
-    if (!this.material) return;
-    if (!this.gathering) {
-      this.scrollY.current = lerp(this.scrollY.current, this.scrollY.target, 0.12);
-      this.material.uniforms.uScrollY.value = this.scrollY.current;
-    }
-    this.material.uniforms.uSpeedY.value *= 0.835;    // 波浪随速度衰减回平
   }
 }
 
@@ -391,7 +368,7 @@ class CoverRing {
 
     this.VISIBLE_REL = 3;
     this.AUTO_STEP_MS = 600;
-    this.AUTO_DWELL = 1100;
+    this.AUTO_DWELL = 1700;
     this.IDLE_DELAY = 1500;
     this.FRICTION = 300;
 
@@ -670,7 +647,6 @@ class Canvas {
     this.setSizes();
     this.magazine = new Magazine({
       scene: this.scene,
-      sizes: this.sizes,
       onSettled: () => this.handoffToRing(),
     });
 
@@ -709,13 +685,11 @@ class Canvas {
     this.setSizes();
     this.renderer.setPixelRatio(this.dimensions.pixelRatio);
     this.renderer.setSize(this.dimensions.width, this.dimensions.height);
-    this.magazine?.onResize(this.sizes);
   }
 
   render() {
     if (this.stopped) return;                 // 轮盘接管后不再排帧
     this.renderer.render(this.scene, this.camera);
-    this.magazine?.render();
     requestAnimationFrame(this.render.bind(this));
   }
 }
