@@ -83,7 +83,55 @@ function gallerySrc(album, i) {
   return 'assets/covers/tracks/' + album.gallery + '/t' + String(i + 1).padStart(2, '0') + '.jpg';
 }
 
+const FOCUS = {"chat-shire/t01":[0.587,0.246],"chat-shire/t02":[0.705,0.593],"chat-shire/t03":[0.759,0.691],"chat-shire/t04":[0.764,0.134],"chat-shire/t05":[0.5,0.38],"chat-shire/t06":[0.412,0.32],"chat-shire/t07":[0.516,0.383],"flower-bookmark/t01":[0.289,0.165],"flower-bookmark/t02":[0.501,0.543],"flower-bookmark/t03":[0.5,0.38],"flower-bookmark/t04":[0.5,0.38],"flower-bookmark/t05":[0.37,0.918],"flower-bookmark/t06":[0.328,0.412],"flower-bookmark/t07":[0.141,0.376],"flower-bookmark-2/t01":[0.227,0.861],"flower-bookmark-2/t02":[0.5,0.38],"flower-bookmark-2/t03":[0.5,0.38],"flower-bookmark-2/t04":[0.735,0.234],"flower-bookmark-2/t05":[0.488,0.291],"flower-bookmark-2/t06":[0.416,0.388],"growing-up/t01":[0.383,0.362],"growing-up/t02":[0.524,0.827],"growing-up/t03":[0.5,0.38],"growing-up/t04":[0.507,0.308],"growing-up/t05":[0.506,0.313],"growing-up/t06":[0.501,0.329],"growing-up/t07":[0.409,0.394],"growing-up/t08":[0.434,0.384],"growing-up/t09":[0.5,0.38],"growing-up/t10":[0.512,0.417],"growing-up/t11":[0.381,0.094],"growing-up/t12":[0.545,0.243],"growing-up/t13":[0.442,0.152],"growing-up/t14":[0.383,0.514],"iu-im/t01":[0.386,0.447],"iu-im/t02":[0.549,0.212],"iu-im/t03":[0.492,0.162],"iu-im/t04":[0.53,0.152],"iu-im/t05":[0.437,0.364],"iu-im/t06":[0.5,0.38],"last-fantasy/t01":[0.665,0.206],"last-fantasy/t02":[0.5,0.38],"last-fantasy/t03":[0.661,0.32],"last-fantasy/t04":[0.543,0.383],"last-fantasy/t05":[0.614,0.303],"last-fantasy/t06":[0.342,0.334],"last-fantasy/t07":[0.606,0.487],"last-fantasy/t08":[0.424,0.14],"last-fantasy/t09":[0.43,0.218],"last-fantasy/t10":[0.555,0.28],"last-fantasy/t11":[0.491,0.382],"last-fantasy/t12":[0.367,0.344],"last-fantasy/t13":[0.195,0.837],"lilac/t01":[0.533,0.491],"lilac/t02":[0.848,0.078],"lilac/t03":[0.706,0.621],"lilac/t04":[0.837,0.628],"lilac/t05":[0.677,0.44],"lilac/t06":[0.545,0.498],"lilac/t07":[0.352,0.481],"lilac/t08":[0.582,0.509],"lilac/t09":[0.426,0.349],"lilac/t10":[0.483,0.379],"lost-and-found/t01":[0.502,0.361],"lost-and-found/t02":[0.44,0.237],"lost-and-found/t03":[0.5,0.38],"lost-and-found/t04":[0.5,0.38],"lost-and-found/t05":[0.809,0.655],"lost-and-found/t06":[0.551,0.311],"love-poem/t01":[0.659,0.233],"love-poem/t02":[0.476,0.405],"love-poem/t03":[0.602,0.361],"love-poem/t04":[0.5,0.38],"love-poem/t05":[0.338,0.235],"love-poem/t06":[0.482,0.265],"modern-times/t01":[0.666,0.28],"modern-times/t02":[0.504,0.198],"modern-times/t03":[0.495,0.518],"modern-times/t04":[0.507,0.244],"modern-times/t05":[0.529,0.291],"modern-times/t06":[0.51,0.271],"modern-times/t07":[0.48,0.266],"modern-times/t08":[0.524,0.161],"modern-times/t09":[0.531,0.223],"modern-times/t10":[0.572,0.307],"modern-times/t11":[0.545,0.384],"modern-times/t12":[0.5,0.38],"modern-times/t13":[0.492,0.337],"palette/t01":[0.547,0.435],"palette/t02":[0.262,0.676],"palette/t03":[0.5,0.38],"palette/t04":[0.292,0.518],"palette/t05":[0.337,0.061],"palette/t06":[0.648,0.531],"palette/t07":[0.775,0.71],"palette/t08":[0.514,0.788],"palette/t09":[0.707,0.573],"palette/t10":[0.5,0.38],"real/t01":[0.501,0.294],"real/t02":[0.284,0.249],"real/t03":[0.493,0.353],"real/t04":[0.805,0.536],"real/t05":[0.719,0.416],"real/t06":[0.5,0.38],"real/t07":[0.595,0.264],"spring-of-twenty/t01":[0.868,0.205],"spring-of-twenty/t02":[0.509,0.489],"spring-of-twenty/t03":[0.5,0.38],"the-winning/t01":[0.605,0.437],"the-winning/t02":[0.5,0.38],"the-winning/t03":[0.578,0.464],"the-winning/t04":[0.546,0.562],"the-winning/t05":[0.5,0.38]};
+
 const REDUCED_MOTION = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/* ---------- 试听：iTunes Search 30 秒官方预览；拿不到则打开 YouTube 搜索 ---------- */
+
+const player = { audio: new Audio(), title: null, cache: {} };
+player.audio.addEventListener('ended', () => setNowPlaying(null));
+
+function setNowPlaying(title, paused = false) {
+  const bar = document.getElementById('now-playing');
+  if (!title) { bar.hidden = true; player.title = null; return; }
+  bar.hidden = false;
+  document.getElementById('np-title').textContent = title;
+  document.getElementById('np-toggle').textContent = paused ? '▶' : '⏸';
+  document.querySelectorAll('.av-tracks li').forEach((li) =>
+    li.classList.toggle('playing', li.textContent === title));
+}
+
+async function fetchPreview(title) {
+  if (title in player.cache) return player.cache[title];
+  const q = encodeURIComponent('IU ' + title.replace(/\(.*?\)/g, '').trim());
+  const res = await fetch(`https://itunes.apple.com/search?term=${q}&media=music&limit=8&country=KR`);
+  const data = await res.json();
+  const hit = data.results.find((r) => /IU|아이유/i.test(r.artistName || '') && r.previewUrl)
+           || data.results.find((r) => r.previewUrl);
+  player.cache[title] = hit ? hit.previewUrl : null;
+  return player.cache[title];
+}
+
+async function playTrack(title) {
+  if (player.title === title) {              // 再点同一首：暂停/继续
+    if (player.audio.paused) { player.audio.play().catch(() => {}); setNowPlaying(title, false); }
+    else { player.audio.pause(); setNowPlaying(title, true); }
+    return;
+  }
+  try {
+    const url = await fetchPreview(title);
+    if (!url) throw new Error('no preview');
+    player.audio.src = url;
+    await player.audio.play();
+    player.title = title;
+    setNowPlaying(title);
+  } catch (_) {
+    // 环境不允许外部请求（如 artifact 预览）或没找到试听：打开 YouTube 搜索
+    window.open('https://www.youtube.com/results?search_query=' +
+      encodeURIComponent('IU ' + title), '_blank', 'noreferrer');
+  }
+}
 
 /* ---------- 着色器（与参考项目一致，页面为正方形封面） ---------- */
 
@@ -834,8 +882,11 @@ void main()
 `;
 
 class PlayerField {
-  constructor({ scene, sizes, album, gallery = [] }) {
+  constructor({ scene, sizes, album, gallery = [], camera, onPlay }) {
     this.gallery = gallery;
+    this.camera = camera;
+    this.onPlay = onPlay;
+    this.album = album;
     this.scene = scene;
     this.sizes = sizes;
     this.active = true;
@@ -871,7 +922,11 @@ class PlayerField {
       const c = document.createElement('canvas');
       c.width = c.height = CELL;
       const side = Math.min(img.width, img.height);
-      c.getContext('2d').drawImage(img, (img.width - side) / 2, (img.height - side) / 2, side, side, 0, 0, CELL, CELL);
+      // 以检测到的人脸为裁剪中心（FOCUS 由 OpenCV 预扫描生成），保证脸不被切
+      const [fx, fy] = (img.__key && FOCUS[img.__key]) || [0.5, 0.45];
+      const sx = Math.min(Math.max(fx * img.width - side / 2, 0), img.width - side);
+      const sy = Math.min(Math.max(fy * img.height - side / 2, 0), img.height - side);
+      c.getContext('2d').drawImage(img, sx, sy, side, side, 0, 0, CELL, CELL);
       return c;
     };
 
@@ -940,14 +995,25 @@ class PlayerField {
 
   bindDrag(element) {
     this.dragElement = element;
+    let downX = 0, downY = 0, moved = 0;
     this.onDown = (e) => {
       this.drag.isDown = true;
-      this.drag.lastX = e.clientX;
-      this.drag.lastY = e.clientY;
+      this.drag.lastX = downX = e.clientX;
+      this.drag.lastY = downY = e.clientY;
+      moved = 0;
       element.setPointerCapture(e.pointerId);
     };
+    this.onTapUp = (e) => {
+      moved = Math.max(moved, Math.hypot(e.clientX - downX, e.clientY - downY));
+      if (moved < 8 && this.active) {
+        const cell = this.pickCell(e.clientX, e.clientY);
+        if (cell != null && this.onPlay) this.onPlay(this.album.tracks[cell % this.album.tracks.length]);
+      }
+    };
+    element.addEventListener('pointerup', this.onTapUp);
     this.onMove = (e) => {
       if (!this.drag.isDown || !this.active) return;
+      moved = Math.max(moved, Math.hypot(e.clientX - downX, e.clientY - downY));
       const dx = e.clientX - this.drag.lastX;
       const dy = e.clientY - this.drag.lastY;
       this.drag.lastX = e.clientX;
@@ -962,6 +1028,36 @@ class PlayerField {
     element.addEventListener('pointerdown', this.onDown);
     window.addEventListener('pointermove', this.onMove);
     window.addEventListener('pointerup', this.onUp);
+  }
+
+  /* 复算着色器位移，把每张卡中心投影到屏幕，找点击点附近最靠前的卡 */
+  pickCell(clientX, clientY) {
+    const attr = this.geometry.getAttribute('aInitialPosition');
+    const spd = this.geometry.getAttribute('aMeshSpeed');
+    const u = this.material.uniforms;
+    const wrap = (a, m) => ((a % m) + m) % m;
+    let best = null, bestZ = -Infinity;
+    const v = new THREE.Vector3();
+    for (let i = 0; i < this.meshCount; i++) {
+      const ix = attr.getX(i), iy = attr.getY(i), iz = attr.getZ(i);
+      const maxXo = Math.abs(ix - this.maxDisp.x), minXo = Math.abs(ix + this.maxDisp.x);
+      const maxYo = Math.abs(iy - this.maxDisp.y), minYo = Math.abs(iy + this.maxDisp.y);
+      const maxZo = Math.abs(iz - 12), minZo = Math.abs(iz + 30);
+      const x = ix + wrap(minXo - u.uDrag.value.x + u.uTime.value * spd.getX(i), maxXo + minXo) - minXo;
+      const y = iy + wrap(minYo - u.uDrag.value.y, maxYo + minYo) - minYo;
+      const z = iz + wrap(u.uScrollY.value + minZo, maxZo + minZo) - minZo;
+      if (z > 5.5 || z < -25) continue;                      // 贴脸/太远的不算
+      v.set(x, y, z).project(this.camera);
+      if (v.z > 1) continue;
+      const sx = (v.x + 1) / 2 * window.innerWidth;
+      const sy = (1 - v.y) / 2 * window.innerHeight;
+      const k = 1 - (z - 12) / -42;                          // 近大远小的命中半径
+      const r = 90 * Math.min(1.6, Math.max(0.4, k));
+      if (Math.hypot(sx - clientX, sy - clientY) < r && z > bestZ) {
+        bestZ = z; best = i;
+      }
+    }
+    return best == null ? null : best % this.cellCount;
   }
 
   onWheel(event) {
@@ -987,6 +1083,7 @@ class PlayerField {
     window.removeEventListener('wheel', this.onWheelBound);
     if (this.dragElement) {
       this.dragElement.removeEventListener('pointerdown', this.onDown);
+      this.dragElement.removeEventListener('pointerup', this.onTapUp);
       window.removeEventListener('pointermove', this.onMove);
       window.removeEventListener('pointerup', this.onUp);
     }
@@ -1067,8 +1164,9 @@ class Canvas {
     if (this.field || this.loadingField) return;
     this.loadingField = true;
     const urls = Array.from({ length: album.galleryN || 0 }, (_, i) => gallerySrc(album, i));
-    Promise.all(urls.map((u) => new Promise((res) => {
+    Promise.all(urls.map((u, i) => new Promise((res) => {
       const im = new Image();
+      im.__key = album.gallery + '/t' + String(i + 1).padStart(2, '0');
       im.onload = () => res(im);
       im.onerror = () => res(null);       // 缺图跳过
       im.src = u;
@@ -1085,7 +1183,10 @@ class Canvas {
       this.scene.remove(this.magazine.instancedMesh);
       this.magazine.instancedMesh = null;
     }
-    this.field = new PlayerField({ scene: this.scene, sizes: this.sizes, album, gallery });
+    this.field = new PlayerField({
+      scene: this.scene, sizes: this.sizes, album, gallery,
+      camera: this.camera, onPlay: (t) => playTrack(t),
+    });
     this.field.bindDrag(this.element);
 
     const view = document.getElementById('album-view');
@@ -1094,6 +1195,10 @@ class Canvas {
     const trackList = view.querySelector('.av-tracks');
     trackList.innerHTML = album.tracks.map((t) => `<li>${t}</li>`).join('');
     trackList.classList.toggle('two-col', album.tracks.length > 6);
+    trackList.onclick = (e) => {
+      const li = e.target.closest('li');
+      if (li) playTrack(li.textContent);
+    };
     view.hidden = false;
     document.body.classList.add('field-on');
 
@@ -1102,6 +1207,8 @@ class Canvas {
 
   closeAlbum() {
     if (!this.field) return;
+    player.audio.pause();
+    setNowPlaying(null);
     this.field.active = false;
     document.body.classList.remove('field-on');
     const view = document.getElementById('album-view');
@@ -1138,6 +1245,7 @@ preloadCovers().then(() => {
   try {
     const canvas = new Canvas();
     document.getElementById('btn-ring-back').addEventListener('click', () => canvas.closeAlbum());
+    document.getElementById('np-toggle').addEventListener('click', () => player.title && playTrack(player.title));
   } catch (err) {
     console.error('WebGL 初始化失败，退回封面墙：', err);
     showFallbackWall();
