@@ -40,6 +40,16 @@
   <!-- WebGL 不可用时的封面墙备用方案（由脚本填充并显示） -->
   <div id="fallback" hidden></div>
 
+  <!-- 专辑视图覆层：播放器卡片场之上的曲目信息与返回按钮 -->
+  <div id="album-view" hidden>
+    <button class="av-back" id="btn-ring-back">&larr; BACK</button>
+    <div class="av-info">
+      <h2 class="av-title"></h2>
+      <p class="av-meta"></p>
+      <ol class="av-tracks"></ol>
+    </div>
+  </div>
+
   <canvas id="webgl"></canvas>
   <script type="module" src="js/magazine.js"></script>
 </body>

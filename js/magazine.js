@@ -8,24 +8,42 @@ import * as THREE from '../assets/vendor/three.module.min.js';
 /* ---------- 页面素材：13 张专辑封面 ---------- */
 
 const ALBUMS = [
-  { file: 'lost-and-found.png' ,        name: 'Lost and Found',          year: 2008 },
-  { file: 'iu-im.png' ,                 name: 'IU…IM',                   year: 2009 },
-  { file: 'growing-up.jpeg',            name: 'Growing Up',              year: 2009 },
-  { file: 'real.png' ,                  name: 'Real',                    year: 2010 },
-  { file: 'last-fantasy.jpeg',          name: 'Last Fantasy',            year: 2011 },
-  { file: 'spring-of-twenty.jpeg',      name: '스무 살의 봄',              year: 2012 },
-  { file: 'modern-times.jpeg',          name: 'Modern Times',            year: 2013 },
-  { file: 'modern-times-epilogue.jpeg', name: 'Modern Times – Epilogue', year: 2013 },
-  { file: 'flower-bookmark.jpeg',       name: '꽃갈피',                    year: 2014 },
-  { file: 'chat-shire.jpg',             name: 'CHAT-SHIRE',              year: 2015 },
-  { file: 'palette.png' ,               name: 'Palette',                 year: 2017 },
-  { file: 'flower-bookmark-2.jpeg',     name: '꽃갈피 둘',                 year: 2017 },
-  { file: 'love-poem.jpeg',             name: 'Love poem',               year: 2019 },
-  { file: 'celebrity.jpeg',             name: 'Celebrity',               year: 2021 },
-  { file: 'lilac.jpeg',                 name: 'LILAC',                   year: 2021 },
-  { file: 'pieces.png' ,                name: '조각집 Pieces',             year: 2021 },
-  { file: 'love-wins-all.jpeg',         name: 'Love wins all',           year: 2024 },
-  { file: 'the-winning.jpeg',           name: 'The Winning',             year: 2024 },
+  { file: 'lost-and-found.png' ,        name: 'Lost and Found',          year: 2008,
+    tracks: ['미아 Lost Child'] },
+  { file: 'iu-im.png' ,                 name: 'IU…IM',                   year: 2009,
+    tracks: ['마쉬멜로우 Marshmallow'] },
+  { file: 'growing-up.jpeg',            name: 'Growing Up',              year: 2009,
+    tracks: ['Boo', '있잖아 Hey'] },
+  { file: 'real.png' ,                  name: 'Real',                    year: 2010,
+    tracks: ['좋은 날 Good Day'] },
+  { file: 'last-fantasy.jpeg',          name: 'Last Fantasy',            year: 2011,
+    tracks: ['너랑 나 You & I', '삼촌 Uncle', '사랑니', '잠자는 숲 속의 왕자'] },
+  { file: 'spring-of-twenty.jpeg',      name: '스무 살의 봄',              year: 2012,
+    tracks: ['복숭아 Peach', '하루 끝 Every End of the Day'] },
+  { file: 'modern-times.jpeg',          name: 'Modern Times',            year: 2013,
+    tracks: ['분홍신 The Red Shoes', '을의 연애', '우울시계'] },
+  { file: 'modern-times-epilogue.jpeg', name: 'Modern Times – Epilogue', year: 2013,
+    tracks: ['금요일에 만나요 Friday', '소원 Wish'] },
+  { file: 'flower-bookmark.jpeg',       name: '꽃갈피',                    year: 2014,
+    tracks: ['나의 옛날이야기', '너의 의미 The Meaning of You', '꽃'] },
+  { file: 'chat-shire.jpg',             name: 'CHAT-SHIRE',              year: 2015,
+    tracks: ['스물셋 Twenty-three', 'Zezé', '무릎 Knees', '푸르던'] },
+  { file: 'palette.png' ,               name: 'Palette',                 year: 2017,
+    tracks: ['팔레트 Palette', '밤편지 Through the Night', '이런 엔딩 Ending Scene'] },
+  { file: 'flower-bookmark-2.jpeg',     name: '꽃갈피 둘',                 year: 2017,
+    tracks: ['가을 아침 Autumn Morning', '개여울', '매일 그대와'] },
+  { file: 'love-poem.jpeg',             name: 'Love poem',               year: 2019,
+    tracks: ['Love poem', 'Blueming', 'unlucky', '시간의 바깥'] },
+  { file: 'celebrity.jpeg',             name: 'Celebrity',               year: 2021,
+    tracks: ['Celebrity'] },
+  { file: 'lilac.jpeg',                 name: 'LILAC',                   year: 2021,
+    tracks: ['라일락 LILAC', 'Coin', '아이와 나의 바다 My Sea', '에필로그 Epilogue'] },
+  { file: 'pieces.png' ,                name: '조각집 Pieces',             year: 2021,
+    tracks: ['겨울잠 Winter Sleep', '드라마 Drama'] },
+  { file: 'love-wins-all.jpeg',         name: 'Love wins all',           year: 2024,
+    tracks: ['Love wins all'] },
+  { file: 'the-winning.jpeg',           name: 'The Winning',             year: 2024,
+    tracks: ['Shopper', '홀씨 Holssi', 'Shh..'] },
 ];
 const COVER_SRC = {};
 ALBUMS.forEach((a) => { COVER_SRC[a.file] = 'assets/covers/' + a.file; });
@@ -353,7 +371,8 @@ class Magazine {
    拖动跟手、惯性滑行渐停、空闲时走一步停一拍地自动轮换 */
 
 class CoverRing {
-  constructor() {
+  constructor({ onOpen } = {}) {
+    this.onOpen = onOpen;
     this.rot = 0;
     this.vel = 0;
     this.inertia = false;
@@ -575,7 +594,7 @@ class CoverRing {
       this.lastTouch = performance.now();
       area.classList.remove('grabbing');
       if (moved < 8) {
-        // 轻点侧边的卡：转到它
+        // 轻点：中间的卡 → 打开专辑；侧边的卡 → 转到它
         const hit = document.elementFromPoint(e.clientX, e.clientY);
         const t = hit && hit.closest('.ring-card');
         if (t) {
@@ -584,6 +603,7 @@ class CoverRing {
           let rel = (((i - this.rot) % n) + n) % n;
           if (rel > n / 2) rel -= n;
           if (Math.abs(rel) >= 0.5) { this.animateRotTo(this.rot + rel, 520); return; }
+          if (this.onOpen) { this.onOpen(this.cards[i].album); return; }
         }
         this.animateRotTo(Math.round(this.rot), 360);
         return;
@@ -620,7 +640,289 @@ class CoverRing {
       this.lastTouch = performance.now();
       if (e.key === 'ArrowLeft') { e.preventDefault(); this.animateRotTo(Math.round(this.rot) - 1); }
       if (e.key === 'ArrowRight') { e.preventDefault(); this.animateRotTo(Math.round(this.rot) + 1); }
+      if (e.key === 'Enter' && this.onOpen) {
+        e.preventDefault();
+        const n = this.cards.length;
+        this.onOpen(this.cards[((Math.round(this.rot) % n) + n) % n].album);
+      }
     });
+  }
+}
+
+/* ---------- 专辑播放器卡片场（参照 J0SUKE/spotify-visualiser） ----------
+   点开轮盘中间的专辑后进入：数百张「播放器卡片」漂浮在 3D 空间里缓缓横移，
+   拖拽平移视野、滚轮向纵深穿行（Z 轴取模无限循环），远处卡片淡入并带模糊光晕。
+   播放器卡片框架由 Canvas 程序化绘制（不依赖外部素材）。 */
+
+// 卡片艺术区（封面挖孔）在贴图 UV 里的位置，JS 与着色器共用
+const CARD_W = 640, CARD_H = 1082;
+const HOLE = { x: 38, y: 64, size: 564 };
+const HOLE_UV = {
+  u0: HOLE.x / CARD_W,
+  w:  HOLE.size / CARD_W,
+  v0: 1 - (HOLE.y + HOLE.size) / CARD_H,
+  h:  HOLE.size / CARD_H,
+};
+
+/* 程序化绘制播放器卡片框架：车体 #161616（b>0.02），封面挖孔纯黑（b<0.02 触发着色器采样封面） */
+function drawPlayerCard() {
+  const c = document.createElement('canvas');
+  c.width = CARD_W; c.height = CARD_H;
+  const ctx = c.getContext('2d');
+  const rr = (x, y, w, h, r) => {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  };
+  // 卡体
+  rr(0, 0, CARD_W, CARD_H, 52); ctx.fillStyle = '#161616'; ctx.fill();
+  // 顶部提手
+  rr(CARD_W / 2 - 70, 20, 140, 10, 5); ctx.fillStyle = '#e8e8e8'; ctx.fill();
+  // 封面挖孔（纯黑 = 着色器里替换成封面）
+  rr(HOLE.x, HOLE.y, HOLE.size, HOLE.size, 28); ctx.fillStyle = '#000'; ctx.fill();
+  // 进度条
+  rr(38, 742, 564, 6, 3); ctx.fillStyle = '#4d4d4d'; ctx.fill();
+  rr(38, 742, 92, 6, 3); ctx.fillStyle = '#ffffff'; ctx.fill();
+  ctx.fillStyle = '#c9c9c9'; ctx.font = '26px sans-serif';
+  ctx.textAlign = 'left';  ctx.fillText('0:10', 38, 798);
+  ctx.textAlign = 'right'; ctx.fillText('-3:36', 602, 798);
+  // 控制键：上一首 / 暂停 / 下一首
+  ctx.fillStyle = '#fff';
+  const tri = (cx, cy, s, dir) => {
+    ctx.beginPath();
+    ctx.moveTo(cx + dir * s, cy - s * 0.8);
+    ctx.lineTo(cx + dir * s, cy + s * 0.8);
+    ctx.lineTo(cx - dir * s, cy);
+    ctx.closePath(); ctx.fill();
+  };
+  const cy = 890;
+  tri(172, cy, 26, 1); tri(214, cy, 26, 1);            // ⏮（双三角向左）
+  rr(296, cy - 36, 18, 72, 6); ctx.fill();             // ⏸
+  rr(330, cy - 36, 18, 72, 6); ctx.fill();
+  tri(468, cy, 26, -1); tri(426, cy, 26, -1);          // ⏭
+  // 音量条
+  ctx.fillStyle = '#4d4d4d'; rr(120, 1004, 400, 5, 2.5); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(78, 1006); ctx.lineTo(98, 992); ctx.lineTo(98, 1020); ctx.closePath();
+  ctx.fillStyle = '#c9c9c9'; ctx.fill();
+  ctx.beginPath(); ctx.arc(368, 1006, 15, 0, Math.PI * 2); ctx.fillStyle = '#fff'; ctx.fill();
+  return c;
+}
+
+const fieldVertexShader = /* glsl */ `
+attribute vec3 aInitialPosition;
+attribute float aMeshSpeed;
+
+uniform float uTime;
+uniform vec2 uMaxDisp;
+uniform vec2 uDrag;
+uniform float uScrollY;
+
+varying vec2 vUv;
+varying float vVisibility;
+
+float remap(float value, float originMin, float originMax)
+{
+    return clamp((value - originMin) / (originMax - originMin), 0., 1.);
+}
+
+void main()
+{
+    vec3 newPosition = position + aInitialPosition;
+
+    float maxYoffset = distance(aInitialPosition.y, uMaxDisp.y);
+    float minYoffset = distance(aInitialPosition.y, -uMaxDisp.y);
+    float maxXoffset = distance(aInitialPosition.x, uMaxDisp.x);
+    float minXoffset = distance(aInitialPosition.x, -uMaxDisp.x);
+
+    // 横向缓漂 + 拖拽平移，出界取模回绕
+    float xDisplacement = mod(minXoffset - uDrag.x + uTime * aMeshSpeed, maxXoffset + minXoffset) - minXoffset;
+    float yDisplacement = mod(minYoffset - uDrag.y, maxYoffset + minYoffset) - minYoffset;
+
+    // 纵深穿行：Z 取模无限循环
+    float maxZ = 12.;
+    float minZ = -30.;
+    float maxZoffset = distance(aInitialPosition.z, maxZ);
+    float minZoffset = distance(aInitialPosition.z, minZ);
+    float zDisplacement = mod(uScrollY + minZoffset, maxZoffset + minZoffset) - minZoffset;
+
+    newPosition.x += xDisplacement;
+    newPosition.y += yDisplacement;
+    newPosition.z += zDisplacement;
+
+    vVisibility = remap(newPosition.z, minZ, minZ + 5.);
+
+    gl_Position = projectionMatrix * viewMatrix * modelMatrix * instanceMatrix * vec4(newPosition, 1.0);
+    vUv = uv;
+}
+`;
+
+const fieldFragmentShader = /* glsl */ `
+varying vec2 vUv;
+varying float vVisibility;
+
+uniform sampler2D uWrapper;
+uniform sampler2D uCover;
+uniform sampler2D uBlurry;
+
+void main()
+{
+    vec4 texel = texture2D(uWrapper, vUv);
+    if (texel.a < 0.01) discard;
+
+    vec2 artUV = vec2(
+        (vUv.x - ${HOLE_UV.u0.toFixed(5)}) / ${HOLE_UV.w.toFixed(5)},
+        (vUv.y - ${HOLE_UV.v0.toFixed(5)}) / ${HOLE_UV.h.toFixed(5)}
+    );
+    artUV = clamp(artUV, 0., 1.);
+
+    vec4 color = texel.b < 0.02
+        ? texture2D(uCover, artUV)                  // 挖孔区：封面
+        : texel + texture2D(uBlurry, artUV) * 0.8;  // 卡体：叠加封面模糊光晕
+
+    color.a *= vVisibility;
+    color.rgb = min(color.rgb, vec3(1.));
+    gl_FragColor = color;
+}
+`;
+
+class PlayerField {
+  constructor({ scene, sizes, album }) {
+    this.scene = scene;
+    this.sizes = sizes;
+    this.active = true;
+    this.meshCount = 300;
+    this.maxDisp = { x: sizes.width * 2, y: sizes.height * 2 };
+    this.drag = { xCurrent: 0, xTarget: 0, yCurrent: 0, yTarget: 0, isDown: false, lastX: 0, lastY: 0 };
+    this.scrollY = { target: 0, current: 0 };
+
+    this.geometry = new THREE.PlaneGeometry(2, 2 * (CARD_H / CARD_W), 1, 1);
+    this.createTextures(album);
+    this.createMaterial();
+    this.createMesh();
+
+    this.onWheelBound = this.onWheel.bind(this);
+    window.addEventListener('wheel', this.onWheelBound, { passive: true });
+  }
+
+  /* 封面居中裁方 + 模糊光晕版 */
+  createTextures(album) {
+    const CELL = 512;
+    const img = album.img;
+    const side = Math.min(img.width, img.height);
+    const sx = (img.width - side) / 2, sy = (img.height - side) / 2;
+
+    const cover = document.createElement('canvas');
+    cover.width = cover.height = CELL;
+    cover.getContext('2d').drawImage(img, sx, sy, side, side, 0, 0, CELL, CELL);
+    this.coverTexture = new THREE.Texture(cover);
+    this.coverTexture.colorSpace = THREE.SRGBColorSpace;
+    this.coverTexture.needsUpdate = true;
+
+    const blurry = document.createElement('canvas');
+    blurry.width = blurry.height = CELL;
+    const bctx = blurry.getContext('2d');
+    bctx.filter = 'blur(60px)';
+    bctx.drawImage(cover, 0, 0);
+    this.blurryTexture = new THREE.Texture(blurry);
+    this.blurryTexture.needsUpdate = true;
+
+    this.wrapperTexture = new THREE.Texture(drawPlayerCard());
+    this.wrapperTexture.needsUpdate = true;
+  }
+
+  createMaterial() {
+    this.material = new THREE.ShaderMaterial({
+      vertexShader: fieldVertexShader,
+      fragmentShader: fieldFragmentShader,
+      transparent: true,
+      uniforms: {
+        uTime: { value: 0 },
+        uMaxDisp: { value: new THREE.Vector2(this.maxDisp.x, this.maxDisp.y) },
+        uDrag: { value: new THREE.Vector2(0, 0) },
+        uScrollY: { value: 0 },
+        uWrapper: new THREE.Uniform(this.wrapperTexture),
+        uCover: new THREE.Uniform(this.coverTexture),
+        uBlurry: new THREE.Uniform(this.blurryTexture),
+      },
+    });
+  }
+
+  createMesh() {
+    this.mesh = new THREE.InstancedMesh(this.geometry, this.material, this.meshCount);
+    const initialPosition = new Float32Array(this.meshCount * 3);
+    const meshSpeed = new Float32Array(this.meshCount);
+    for (let i = 0; i < this.meshCount; i++) {
+      initialPosition[i * 3 + 0] = (Math.random() - 0.5) * this.maxDisp.x * 2;
+      initialPosition[i * 3 + 1] = (Math.random() - 0.5) * this.maxDisp.y * 2;
+      initialPosition[i * 3 + 2] = Math.random() * (7 - -30) - 30;
+      meshSpeed[i] = Math.random() * 0.5 + 0.5;
+    }
+    this.geometry.setAttribute('aInitialPosition', new THREE.InstancedBufferAttribute(initialPosition, 3));
+    this.geometry.setAttribute('aMeshSpeed', new THREE.InstancedBufferAttribute(meshSpeed, 1));
+    this.scene.add(this.mesh);
+  }
+
+  bindDrag(element) {
+    this.dragElement = element;
+    this.onDown = (e) => {
+      this.drag.isDown = true;
+      this.drag.lastX = e.clientX;
+      this.drag.lastY = e.clientY;
+      element.setPointerCapture(e.pointerId);
+    };
+    this.onMove = (e) => {
+      if (!this.drag.isDown || !this.active) return;
+      const dx = e.clientX - this.drag.lastX;
+      const dy = e.clientY - this.drag.lastY;
+      this.drag.lastX = e.clientX;
+      this.drag.lastY = e.clientY;
+      this.drag.xTarget += -dx * (this.sizes.width / window.innerWidth);
+      this.drag.yTarget += dy * (this.sizes.height / window.innerHeight);
+    };
+    this.onUp = (e) => {
+      this.drag.isDown = false;
+      try { element.releasePointerCapture(e.pointerId); } catch (_) {}
+    };
+    element.addEventListener('pointerdown', this.onDown);
+    window.addEventListener('pointermove', this.onMove);
+    window.addEventListener('pointerup', this.onUp);
+  }
+
+  onWheel(event) {
+    if (!this.active) return;
+    let pixelY = event.deltaY;
+    if (event.deltaMode === 1) pixelY *= 16;
+    else if (event.deltaMode === 2) pixelY *= window.innerHeight;
+    this.scrollY.target += (pixelY * this.sizes.height) / window.innerHeight;
+  }
+
+  render(delta) {
+    this.material.uniforms.uTime.value += delta * 0.015;
+    this.drag.xCurrent += (this.drag.xTarget - this.drag.xCurrent) * 0.1;
+    this.drag.yCurrent += (this.drag.yTarget - this.drag.yCurrent) * 0.1;
+    this.material.uniforms.uDrag.value.set(this.drag.xCurrent, this.drag.yCurrent);
+    this.scrollY.current += (this.scrollY.target - this.scrollY.current) * 0.12;
+    this.material.uniforms.uScrollY.value = this.scrollY.current;
+  }
+
+  dispose() {
+    this.active = false;
+    window.removeEventListener('wheel', this.onWheelBound);
+    if (this.dragElement) {
+      this.dragElement.removeEventListener('pointerdown', this.onDown);
+      window.removeEventListener('pointermove', this.onMove);
+      window.removeEventListener('pointerup', this.onUp);
+    }
+    this.scene.remove(this.mesh);
+    this.geometry.dispose();
+    this.material.dispose();
+    this.coverTexture.dispose();
+    this.blurryTexture.dispose();
+    this.wrapperTexture.dispose();
   }
 }
 
@@ -658,7 +960,7 @@ class Canvas {
   handoffToRing() {
     const GATHER_MS = 1050;
     this.magazine.gather(GATHER_MS);
-    this.ring = new CoverRing();
+    this.ring = new CoverRing({ onOpen: (album) => this.openAlbum(album) });
     // 纸堆基本合拢时开始交棒：画布淡出与轮盘扇出交叠进行
     setTimeout(() => {
       this.ring.start();                                // body.ring-on 触发画布 CSS 淡出
@@ -687,8 +989,47 @@ class Canvas {
     this.renderer.setSize(this.dimensions.width, this.dimensions.height);
   }
 
+  /* 点开轮盘中间的专辑：进入播放器卡片场 */
+  openAlbum(album) {
+    if (this.field) return;
+    // 开场的书页网格不再需要，让出画布
+    if (this.magazine?.instancedMesh) {
+      this.scene.remove(this.magazine.instancedMesh);
+      this.magazine.instancedMesh = null;
+    }
+    this.field = new PlayerField({ scene: this.scene, sizes: this.sizes, album });
+    this.field.bindDrag(this.element);
+
+    const view = document.getElementById('album-view');
+    view.querySelector('.av-title').textContent = album.name;
+    view.querySelector('.av-meta').textContent = `IU · ${album.year}`;
+    view.querySelector('.av-tracks').innerHTML =
+      album.tracks.map((t) => `<li>${t}</li>`).join('');
+    view.hidden = false;
+    document.body.classList.add('field-on');
+
+    if (this.stopped) { this.stopped = false; this.render(); }
+  }
+
+  closeAlbum() {
+    if (!this.field) return;
+    this.field.active = false;
+    document.body.classList.remove('field-on');
+    const view = document.getElementById('album-view');
+    setTimeout(() => {
+      view.hidden = true;
+      this.field.dispose();
+      this.field = null;
+      this.stopped = true;               // 画布已淡出，停止排帧
+    }, 1000);
+  }
+
   render() {
     if (this.stopped) return;                 // 轮盘接管后不再排帧
+    const now = performance.now();
+    const delta = this.lastT ? Math.min(50, now - this.lastT) : 16;
+    this.lastT = now;
+    this.field?.render(delta);
     this.renderer.render(this.scene, this.camera);
     requestAnimationFrame(this.render.bind(this));
   }
@@ -706,7 +1047,8 @@ function showFallbackWall() {
 preloadCovers().then(() => {
   if (!AVAILABLE.length) { showFallbackWall(); return; }   // 一张封面都没加载出来
   try {
-    new Canvas();
+    const canvas = new Canvas();
+    document.getElementById('btn-ring-back').addEventListener('click', () => canvas.closeAlbum());
   } catch (err) {
     console.error('WebGL 初始化失败，退回封面墙：', err);
     showFallbackWall();

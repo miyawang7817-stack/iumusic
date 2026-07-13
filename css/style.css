@@ -174,6 +174,70 @@ body.ring-on .ring-caption { opacity: 1; }
   .ring-caption { transition-delay: 0s; }
 }
 
+/* ============ 专辑播放器卡片场（点开轮盘中间的专辑进入） ============ */
+
+body.field-on .ring { opacity: 0; pointer-events: none; }
+body.field-on #webgl { opacity: 1; pointer-events: auto; cursor: grab; }
+body.field-on #webgl:active { cursor: grabbing; }
+
+#album-view {
+  position: fixed;
+  inset: 0;
+  z-index: 8;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.8s ease 0.35s;
+}
+body.field-on #album-view { opacity: 1; }
+#album-view[hidden] { display: none; }
+
+.av-back {
+  position: absolute;
+  top: calc(3vmax + 56px);
+  left: 3vmax;
+  pointer-events: auto;
+  background: rgba(19, 19, 19, 0.55);
+  border: 1px solid rgba(255, 251, 235, 0.28);
+  border-radius: 999px;
+  color: rgba(255, 251, 235, 0.75);
+  font-family: inherit;
+  font-size: 12px;
+  letter-spacing: 0.28em;
+  padding: 9px 20px 9px 16px;
+  cursor: pointer;
+  transition: color 200ms, border-color 200ms;
+}
+.av-back:hover { color: rgba(255, 251, 235, 0.95); border-color: rgba(255, 251, 235, 0.55); }
+
+.av-info {
+  position: absolute;
+  left: 3vmax;
+  bottom: calc(3vmax + 40px);
+  max-width: min(460px, 62vw);
+}
+.av-title {
+  font-size: clamp(28px, 4vw, 54px);
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: rgba(255, 251, 235, 0.92);
+  text-shadow: 0 2px 24px rgba(0, 0, 0, 0.6);
+}
+.av-meta {
+  margin-top: 8px;
+  font-size: 12px;
+  letter-spacing: 0.32em;
+  color: rgba(255, 251, 235, 0.5);
+}
+.av-tracks {
+  margin-top: 18px;
+  list-style: none;
+  display: grid;
+  gap: 7px;
+  font-size: 14px;
+  color: rgba(255, 251, 235, 0.68);
+}
+.av-tracks li::before { content: '\266A\2002'; color: rgba(255, 251, 235, 0.35); }
+
 /* WebGL 不可用时的封面墙 */
 #fallback {
   position: fixed;
