@@ -120,7 +120,33 @@ async function fetchPreview(title) {
   return player.cache[title];
 }
 
-async function playTrack(title) {
+/* 本地音源优先：assets/audio/<专辑>/tNN.mp3|m4a|wav（个人使用，自行放置，不入公开仓库） */
+async function tryLocalAudio(album, index) {
+  if (album == null || index == null) return false;
+  const nn = String(index + 1).padStart(2, '0');
+  for (const ext of ['mp3', 'm4a', 'wav']) {
+    try {
+      player.audio.src = `assets/audio/${album.gallery || album.file.replace(/\.[^.]+$/, '')}/t${nn}.${ext}`;
+      await player.audio.play();
+      return true;
+    } catch (_) { /* 下一个格式 */ }
+  }
+  return false;
+}
+
+function showNote(text) {
+  const bar = document.getElementById('now-playing');
+  bar.hidden = false;
+  document.getElementById('np-toggle').style.display = 'none';
+  document.getElementById('np-title').textContent = text;
+  clearTimeout(showNote._t);
+  showNote._t = setTimeout(() => {
+    if (!player.title) bar.hidden = true;
+    document.getElementById('np-toggle').style.display = '';
+  }, 4000);
+}
+
+async function playTrack(title, album, index) {
   if (player.title === title) {              // 再点同一首：暂停/继续
     if (player.audio.paused) {
       player.audio.play().catch(() => {});
@@ -133,6 +159,14 @@ async function playTrack(title) {
     }
     return;
   }
+  // 1) 本地音源
+  if (await tryLocalAudio(album, index)) {
+    player.title = title;
+    setNowPlaying(title);
+    activeField?.setPlayingTitle(title, false);
+    return;
+  }
+  // 2) iTunes 30 秒官方试听
   try {
     const url = await fetchPreview(title);
     if (!url) throw new Error('no preview');
@@ -142,9 +176,8 @@ async function playTrack(title) {
     setNowPlaying(title);
     activeField?.setPlayingTitle(title, false);
   } catch (_) {
-    // 环境不允许外部请求（如 artifact 预览）或没找到试听：打开 YouTube 搜索
-    window.open('https://www.youtube.com/results?search_query=' +
-      encodeURIComponent('IU ' + title), '_blank', 'noreferrer');
+    // 3) 都不行：只提示，不跳转（artifact 预览环境禁外联，属预期）
+    showNote('此预览环境无法出声 — 部署后点击即可播放');
   }
 }
 
@@ -1216,7 +1249,7 @@ class Canvas {
     }
     this.field = new PlayerField({
       scene: this.scene, sizes: this.sizes, album, gallery,
-      camera: this.camera, onPlay: (t) => playTrack(t),
+      camera: this.camera, onPlay: (t) => playTrack(t, album, album.tracks.indexOf(t)),
     });
     activeField = this.field;
     this.field.bindDrag(this.element);
@@ -1229,7 +1262,7 @@ class Canvas {
     trackList.classList.toggle('two-col', album.tracks.length > 6);
     trackList.onclick = (e) => {
       const li = e.target.closest('li');
-      if (li) playTrack(li.textContent);
+      if (li) playTrack(li.textContent, album, [...trackList.children].indexOf(li));
     };
     view.hidden = false;
     document.body.classList.add('field-on');
