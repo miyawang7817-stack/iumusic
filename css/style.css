@@ -193,21 +193,31 @@ body.field-on #album-view { opacity: 1; }
 
 .av-back {
   position: absolute;
-  top: calc(3vmax + 56px);
+  top: calc(3vmax + 58px);
   left: 3vmax;
   pointer-events: auto;
-  background: rgba(19, 19, 19, 0.55);
-  border: 1px solid rgba(255, 251, 235, 0.28);
-  border-radius: 999px;
-  color: rgba(255, 251, 235, 0.75);
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  background: none;
+  border: none;
+  padding: 6px 0;
+  color: rgba(255, 251, 235, 0.55);
   font-family: inherit;
-  font-size: 12px;
-  letter-spacing: 0.28em;
-  padding: 9px 20px 9px 16px;
+  font-size: 11px;
+  letter-spacing: 0.34em;
   cursor: pointer;
-  transition: color 200ms, border-color 200ms;
+  transition: color 250ms;
 }
-.av-back:hover { color: rgba(255, 251, 235, 0.95); border-color: rgba(255, 251, 235, 0.55); }
+.av-back i {
+  display: block;
+  width: 36px;
+  height: 1px;
+  background: currentColor;
+  transition: width 250ms ease;
+}
+.av-back:hover { color: rgba(255, 251, 235, 0.95); }
+.av-back:hover i { width: 54px; }
 
 .av-info {
   position: absolute;
@@ -300,40 +310,54 @@ body.field-on #album-view { opacity: 1; }
 }
 .np-tag { font-size: 10px; letter-spacing: 0.2em; color: rgba(255, 251, 235, 0.4); }
 
-/* 手势控制 */
+/* 手势控制：极简文字按钮 + 状态点 */
 #btn-gesture {
   position: fixed;
-  top: calc(3vmax + 56px);
+  top: calc(3vmax + 58px);
   right: 3vmax;
   z-index: 12;
-  width: 44px;
-  height: 44px;
-  border-radius: 999px;
-  border: 1px solid rgba(255, 251, 235, 0.28);
-  background: rgba(19, 19, 19, 0.55);
-  font-size: 19px;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  background: none;
+  border: none;
+  padding: 6px 0;
+  color: rgba(255, 251, 235, 0.55);
+  font-family: inherit;
+  font-size: 11px;
+  letter-spacing: 0.34em;
   cursor: pointer;
-  transition: border-color 200ms, box-shadow 200ms, opacity 200ms;
-  filter: grayscale(1) brightness(1.6);
+  transition: color 250ms;
 }
-#btn-gesture:hover { border-color: rgba(255, 251, 235, 0.55); }
-#btn-gesture.loading { opacity: 0.5; }
-#btn-gesture.on {
+#btn-gesture:hover { color: rgba(255, 251, 235, 0.95); }
+#btn-gesture .g-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+  transition: background 250ms, box-shadow 250ms;
+}
+#btn-gesture.loading { pointer-events: none; }
+#btn-gesture.loading .g-dot { animation: g-pulse 0.9s ease-in-out infinite; }
+@keyframes g-pulse { 50% { opacity: 0.25; } }
+#btn-gesture.on { color: #c9b8ff; }
+#btn-gesture.on .g-dot {
+  background: #c9b8ff;
   border-color: #c9b8ff;
-  box-shadow: 0 0 14px rgba(201, 184, 255, 0.45);
-  filter: none;
+  box-shadow: 0 0 12px rgba(201, 184, 255, 0.85);
 }
 #gesture-cam {
   position: fixed;
   left: 3vmax;
-  top: calc(3vmax + 56px);
-  z-index: 12;
-  width: 148px;
-  border-radius: 10px;
+  bottom: calc(3vmax + 40px);
+  z-index: 7;
+  width: 132px;
+  border-radius: 8px;
   transform: scaleX(-1);
-  opacity: 0.85;
-  border: 1px solid rgba(255, 251, 235, 0.25);
+  opacity: 0.78;
+  border: 1px solid rgba(255, 251, 235, 0.22);
 }
+body.field-on #gesture-cam { left: auto; right: 3vmax; bottom: calc(3vmax + 100px); }
 #gesture-cam[hidden], #gesture-dot[hidden] { display: none; }
 #gesture-dot {
   position: fixed;

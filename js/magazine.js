@@ -842,6 +842,7 @@ async function toggleGesture() {
       });
     }
     const video = document.getElementById('gesture-cam');
+    video.setAttribute('autoplay', '');
     video.srcObject = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 360, facingMode: 'user' } });
     await video.play();
     if (!gesture.hands) {
@@ -849,6 +850,7 @@ async function toggleGesture() {
       gesture.hands.setOptions({ maxNumHands: 1, modelComplexity: 0, selfieMode: true,
                                  minDetectionConfidence: 0.6, minTrackingConfidence: 0.5 });
       gesture.hands.onResults(onHandResults);
+      await gesture.hands.initialize();      // 等 wasm/模型就绪，避免边加载边送帧导致闪烁
     }
     gesture.video = video;
     gesture.on = true;
@@ -856,11 +858,18 @@ async function toggleGesture() {
     btn.classList.remove('loading');
     btn.classList.add('on');
     showNote('手势已开启：挥手转动 / 捏合选中');
-    let tick = 0;
+    let tick = 0, fails = 0;
     const loop = async () => {
       if (!gesture.on) return;
       if (tick++ % 2 === 0 && video.readyState >= 2) {
-        try { await gesture.hands.send({ image: video }); } catch (_) {}
+        try { await gesture.hands.send({ image: video }); fails = 0; }
+        catch (_) {
+          if (++fails > 30) {               // 持续失败：自动关闭并提示，不再无限闪
+            toggleGesture();
+            showNote('手势识别初始化失败，请刷新页面后重试');
+            return;
+          }
+        }
       }
       requestAnimationFrame(loop);
     };
