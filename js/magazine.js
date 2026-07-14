@@ -835,7 +835,10 @@ function centerTarget() {
 function selectCenter() {
   if (document.body.classList.contains('field-on') && activeField) {
     const cell = activeField.centerCell();
-    if (cell != null) playTrack(activeField.album.tracks[cell % activeField.album.tracks.length], activeField.album, cell);
+    if (cell != null) {
+      const i = cell % activeField.album.tracks.length;   // 实例序号 → 曲目序号（本地音源路径按曲目算）
+      playTrack(activeField.album.tracks[i], activeField.album, i);
+    }
   } else if (document.body.classList.contains('ring-on') && window.__RING) {
     const r = window.__RING, n = r.cards.length;
     if (r.onOpen) r.onOpen(r.cards[((Math.round(r.rot) % n) + n) % n].album);
@@ -907,24 +910,34 @@ function gestureControlLoop() {
   const wdx = s.length >= 2 ? s[s.length - 1].x - s[0].x : 0;
   const wdy = s.length >= 2 ? s[s.length - 1].y - s[0].y : 0;
 
-  // 挥动重新武装：冷却期过了、且手已缓下来（防止回手/惯性余势立刻触发反向翻页）
-  if (!gesture.swipeArmed && now > (gesture.swipeCool || 0) && Math.hypot(wdx, wdy) < dim * 0.06) {
+  // 挥动重新武装：冷却期过了、且手真正停稳 250ms——"挥出-回收"之间的短顿和
+  // 回收起步的缓速都不算数，否则回手会被当成反向挥动把刚翻的又翻回来
+  if (!gesture.swipeArmed && now > (gesture.swipeCool || 0) && still && restedMs > 250) {
     gesture.swipeArmed = true;
   }
 
-  // 挥动触发：窗口内净位移超过屏幕短边的 11%，取主导轴
+  // 挥动触发：窗口内净位移超过屏幕短边的 11%，取主导轴。
+  // 反向锁：上次挥动后 0.9s 内的反方向大位移视为回手，吞掉不触发
   if (gesture.swipeArmed && !pinching) {
     const horiz = Math.abs(wdx) > dim * 0.11 && Math.abs(wdx) > Math.abs(wdy) * 1.3;
     const vert = Math.abs(wdy) > dim * 0.11 && Math.abs(wdy) > Math.abs(wdx) * 1.3;
     const fieldOn = document.body.classList.contains('field-on') && activeField;
-    if (fieldOn && (horiz || vert)) {
-      if (horiz) activeField.drag.xTarget += (wdx < 0 ? 1 : -1) * activeField.sizes.width * 0.55;
-      else activeField.scrollY.target += (wdy < 0 ? 1 : -1) * activeField.sizes.height * 1.1;
-      gesture.swipeArmed = false; gesture.swipeCool = now + 500; s.length = 0;
-    } else if (!fieldOn && horiz && document.body.classList.contains('ring-on') && window.__RING) {
-      const r = window.__RING;
-      r.animateRotTo(Math.round(r.rot) + (wdx < 0 ? 1 : -1), 520);   // 一次挥动固定翻一张，节奏可预期
-      gesture.swipeArmed = false; gesture.swipeCool = now + 500; s.length = 0;
+    if (horiz || vert) {
+      const axis = horiz ? 'h' : 'v';
+      const dirn = horiz ? Math.sign(wdx) : Math.sign(wdy);
+      const reversed = now < (gesture.dirLockUntil || 0)
+        && (gesture.lastAxis !== axis || gesture.lastDir !== dirn);
+      if (!reversed) {
+        if (fieldOn) {
+          if (horiz) activeField.drag.xTarget += (wdx < 0 ? 1 : -1) * activeField.sizes.width * 0.55;
+          else activeField.scrollY.target += (wdy < 0 ? 1 : -1) * activeField.sizes.height * 1.1;
+        } else if (horiz && document.body.classList.contains('ring-on') && window.__RING) {
+          const r = window.__RING;
+          r.animateRotTo(Math.round(r.rot) + (wdx < 0 ? 1 : -1), 520);  // 一次挥动固定翻一张，节奏可预期
+        }
+        gesture.lastAxis = axis; gesture.lastDir = dirn; gesture.dirLockUntil = now + 900;
+      }
+      gesture.swipeArmed = false; gesture.swipeCool = now + (reversed ? 300 : 500); s.length = 0;
     }
   }
 
