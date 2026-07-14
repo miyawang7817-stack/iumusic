@@ -346,16 +346,13 @@ body.field-on #album-view { opacity: 1; }
 }
 #gesture-cam {
   position: fixed;
-  left: 3vmax;
-  bottom: calc(3vmax + 40px);
-  z-index: 7;
-  width: 132px;
-  border-radius: 8px;
-  transform: scaleX(-1);
-  opacity: 0.78;
-  border: 1px solid rgba(255, 251, 235, 0.22);
+  left: -9999px;
+  top: 0;
+  width: 8px;
+  height: 8px;
+  opacity: 0.01;
+  pointer-events: none;
 }
-body.field-on #gesture-cam { left: auto; right: 3vmax; bottom: calc(3vmax + 100px); }
 #gesture-cam[hidden], #gesture-dot[hidden] { display: none; }
 #gesture-dot {
   position: fixed;
@@ -366,6 +363,5 @@ body.field-on #gesture-cam { left: auto; right: 3vmax; bottom: calc(3vmax + 100p
   background: rgba(201, 184, 255, 0.85);
   box-shadow: 0 0 18px rgba(201, 184, 255, 0.8);
   pointer-events: none;
-  transition: transform 60ms linear;
 }
 #gesture-dot.pinch { background: #fff; }

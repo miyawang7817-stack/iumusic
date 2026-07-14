@@ -781,24 +781,39 @@ function onHandResults(res) {
   if (!gesture.on) return;
   const lm = res.multiHandLandmarks && res.multiHandLandmarks[0];
   const dot = document.getElementById('gesture-dot');
-  if (!lm) { gesture.last = null; if (dot) dot.hidden = true; return; }
+  if (!lm) {
+    gesture.last = null;
+    gesture.pinchFrames = 0;
+    if (dot) dot.hidden = true;
+    return;
+  }
 
   const palm = lm[9];
-  const sx = palm.x * window.innerWidth;
-  const sy = palm.y * window.innerHeight;
-  const pinching = Math.hypot(lm[4].x - lm[8].x, lm[4].y - lm[8].y) < 0.055;
+  // EMA 平滑：滤掉识别抖动，光点和控制都更稳
+  const rx = palm.x * window.innerWidth;
+  const ry = palm.y * window.innerHeight;
+  if (!gesture.sm) gesture.sm = { x: rx, y: ry };
+  gesture.sm.x += (rx - gesture.sm.x) * 0.55;
+  gesture.sm.y += (ry - gesture.sm.y) * 0.55;
+  const sx = gesture.sm.x, sy = gesture.sm.y;
+
+  // 捏合迟滞判定：按下阈值 0.05、松开阈值 0.075，且需连续 2 帧，避免误触
+  const pd = Math.hypot(lm[4].x - lm[8].x, lm[4].y - lm[8].y);
+  gesture.pinchFrames = pd < (gesture.pinch ? 0.075 : 0.05) ? (gesture.pinchFrames || 0) + 1 : 0;
+  const pinching = gesture.pinchFrames >= 2;
   const pinchEdge = pinching && !gesture.pinch;
   gesture.pinch = pinching;
   gestureDot(sx, sy, pinching);
 
-  const d = gesture.last ? { dx: sx - gesture.last.sx, dy: sy - gesture.last.sy } : { dx: 0, dy: 0 };
+  let d = gesture.last ? { dx: sx - gesture.last.sx, dy: sy - gesture.last.sy } : { dx: 0, dy: 0 };
   gesture.last = { sx, sy };
+  if (Math.hypot(d.dx, d.dy) < 1.6) d = { dx: 0, dy: 0 };   // 死区：手悬停时画面不漂
 
   if (document.body.classList.contains('field-on') && activeField) {
     // 专辑页：横向挥手平移，纵向挥手向纵深飞行，捏合播放手指处的卡
     if (!pinching) {
-      activeField.drag.xTarget += -d.dx * (activeField.sizes.width / window.innerWidth) * 1.4;
-      activeField.scrollY.target += d.dy * (activeField.sizes.height / window.innerHeight) * 2.4;
+      activeField.drag.xTarget += -d.dx * (activeField.sizes.width / window.innerWidth) * 2.0;
+      activeField.scrollY.target += d.dy * (activeField.sizes.height / window.innerHeight) * 3.4;
     }
     if (pinchEdge) {
       const cell = activeField.pickCell(sx, sy);
@@ -807,8 +822,8 @@ function onHandResults(res) {
   } else if (document.body.classList.contains('ring-on') && window.__RING) {
     // 轮盘：横向挥手转动，捏合打开中间的专辑
     const r = window.__RING;
-    if (!pinching && Math.abs(d.dx) > 1) {
-      r.rot += -d.dx / r.geom.pxPerStep * 1.2;
+    if (!pinching && d.dx !== 0) {
+      r.rot += -d.dx / r.geom.pxPerStep * 2.3;
       r.lastTouch = performance.now();
       r.dirty = true;
     }
@@ -825,7 +840,6 @@ async function toggleGesture() {
     gesture.on = false;
     btn.classList.remove('on');
     gesture.video?.srcObject?.getTracks().forEach((t) => t.stop());
-    document.getElementById('gesture-cam').hidden = true;
     document.getElementById('gesture-dot').hidden = true;
     return;
   }
@@ -896,22 +910,23 @@ async function toggleGesture() {
     }
     gesture.video = video;
     gesture.on = true;
-    video.hidden = false;
     btn.classList.remove('loading');
     btn.classList.add('on');
     showNote('手势已开启：挥手转动 / 捏合选中');
-    let tick = 0, fails = 0;
-    const loop = async () => {
+    let busy = false, fails = 0;
+    const loop = () => {
       if (!gesture.on) return;
-      if (tick++ % 2 === 0 && video.readyState >= 2) {
-        try { await gesture.hands.send({ image: video }); fails = 0; }
-        catch (_) {
-          if (++fails > 30) {               // 持续失败：自动关闭并提示，不再无限闪
-            toggleGesture();
-            showNote('手势识别初始化失败，请刷新页面后重试');
-            return;
-          }
-        }
+      if (!busy && video.readyState >= 2) {
+        busy = true;
+        gesture.hands.send({ image: video })
+          .then(() => { fails = 0; })
+          .catch(() => {
+            if (++fails > 30) {             // 持续失败：自动关闭并提示，不再无限闪
+              toggleGesture();
+              showNote('手势识别初始化失败，请刷新页面后重试');
+            }
+          })
+          .finally(() => { busy = false; });
       }
       requestAnimationFrame(loop);
     };
