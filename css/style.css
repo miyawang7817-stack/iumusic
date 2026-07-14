@@ -311,9 +311,10 @@ body.field-on #album-view { opacity: 1; }
 /* 手势控制：极简文字按钮 + 状态点 */
 #btn-gesture {
   position: fixed;
-  top: calc(3vmax + 58px);
-  right: 3vmax;
-  z-index: 12;
+  bottom: calc(3vmax + 4px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 13;
   display: inline-flex;
   align-items: center;
   gap: 10px;
