@@ -809,6 +809,15 @@ function onHandResults(res) {
 /* 识别样本入口（也是测试注入点）：记录最新手位 + 维护 350ms 样本窗口 */
 function feedHand(x, y, pinchRatio) {
   const t = performance.now();
+  const prev = gesture.hand;
+  if (prev) {
+    // 样本间手速（EMA 抑噪），供光点在两帧识别之间做外推，低识别帧率下依然连续顺滑
+    const dts = Math.max(16, t - prev.t) / 1000;
+    gesture.vx = (gesture.vx || 0) * 0.4 + ((x - prev.x) / dts) * 0.6;
+    gesture.vy = (gesture.vy || 0) * 0.4 + ((y - prev.y) / dts) * 0.6;
+  } else {
+    gesture.vx = 0; gesture.vy = 0;
+  }
   gesture.hand = { x, y, pinchRatio, t };
   gesture.samples.push({ t, x, y });
   while (gesture.samples.length && t - gesture.samples[0].t > 350) gesture.samples.shift();
@@ -860,13 +869,15 @@ function gestureControlLoop() {
   // 手在画面里时不自动轮换（但不抢占吸附/翻页动画，它们本来就是我们要的落点）
   if (window.__RING) window.__RING.lastTouch = now;
 
-  // 光点平滑跟随（轻微 EMA，低延迟）
+  // 光点：按手速外推到"此刻"的预测位置，再按时间常数平滑——识别帧之间不再一跳一停
   if (!gesture.dotInit) {
     gesture.dotX = h.x; gesture.dotY = h.y;
     gesture.dotInit = true;
   }
-  gesture.dotX += (h.x - gesture.dotX) * 0.5;
-  gesture.dotY += (h.y - gesture.dotY) * 0.5;
+  const ahead = Math.min(120, now - h.t) / 1000;
+  const smoothK = 1 - Math.exp(-dt * 14);
+  gesture.dotX += (h.x + (gesture.vx || 0) * ahead - gesture.dotX) * smoothK;
+  gesture.dotY += (h.y + (gesture.vy || 0) * ahead - gesture.dotY) * smoothK;
 
   const pinching = h.pinchRatio < (gesture.pinch ? 0.6 : 0.42);
   gesture.pinch = pinching;
