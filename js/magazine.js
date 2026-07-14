@@ -769,6 +769,40 @@ class CoverRing {
 
 const gesture = { on: false, loading: false, video: null, hands: null, last: null, pinch: false };
 
+/* 手势选中：轮盘=打开中间专辑；专辑页=播放光点处的卡 */
+function gestureSelect(sx, sy) {
+  if (document.body.classList.contains('field-on') && activeField) {
+    const cell = activeField.pickCell(sx, sy);
+    if (cell != null) {
+      playTrack(activeField.album.tracks[cell % activeField.album.tracks.length], activeField.album, cell);
+      return true;
+    }
+    return false;
+  }
+  if (document.body.classList.contains('ring-on') && window.__RING) {
+    const r = window.__RING;
+    if (r.onOpen) {
+      const n = r.cards.length;
+      r.onOpen(r.cards[((Math.round(r.rot) % n) + n) % n].album);
+      return true;
+    }
+  }
+  return false;
+}
+
+/* 悬停目标是否可选中（决定光点要不要开始“充电”） */
+function dwellTarget(sx, sy) {
+  if (document.body.classList.contains('field-on') && activeField) {
+    return activeField.pickCell(sx, sy) != null;
+  }
+  if (document.body.classList.contains('ring-on') && window.__RING) {
+    // 指在中间那张大封面上才开始蓄力
+    const half = Math.min(320, Math.min(window.innerWidth, window.innerHeight) * 0.42) / 2;
+    return Math.abs(sx - window.innerWidth / 2) < half && Math.abs(sy - window.innerHeight / 2) < half;
+  }
+  return false;
+}
+
 function gestureDot(x, y, pinching) {
   let dot = document.getElementById('gesture-dot');
   if (!dot) return;
@@ -783,6 +817,7 @@ function onHandResults(res) {
   const dot = document.getElementById('gesture-dot');
   if (!lm) {
     gesture.last = null;
+    gesture.sm = null;                 // 重置平滑器：重捕捉时不产生单向扫动
     gesture.pinchFrames = 0;
     if (dot) dot.hidden = true;
     return;
@@ -797,9 +832,10 @@ function onHandResults(res) {
   gesture.sm.y += (ry - gesture.sm.y) * 0.55;
   const sx = gesture.sm.x, sy = gesture.sm.y;
 
-  // 捏合迟滞判定：按下阈值 0.05、松开阈值 0.075，且需连续 2 帧，避免误触
-  const pd = Math.hypot(lm[4].x - lm[8].x, lm[4].y - lm[8].y);
-  gesture.pinchFrames = pd < (gesture.pinch ? 0.075 : 0.05) ? (gesture.pinchFrames || 0) + 1 : 0;
+  // 捏合判定：拇指-食指距离 ÷ 手掌尺寸（腕到中指根），与离摄像头远近无关
+  const handSize = Math.hypot(lm[0].x - lm[9].x, lm[0].y - lm[9].y) || 1e-6;
+  const pinchRatio = Math.hypot(lm[4].x - lm[8].x, lm[4].y - lm[8].y) / handSize;
+  gesture.pinchFrames = pinchRatio < (gesture.pinch ? 0.55 : 0.38) ? (gesture.pinchFrames || 0) + 1 : 0;
   const pinching = gesture.pinchFrames >= 2;
   const pinchEdge = pinching && !gesture.pinch;
   gesture.pinch = pinching;
@@ -807,30 +843,45 @@ function onHandResults(res) {
 
   let d = gesture.last ? { dx: sx - gesture.last.sx, dy: sy - gesture.last.sy } : { dx: 0, dy: 0 };
   gesture.last = { sx, sy };
-  if (Math.hypot(d.dx, d.dy) < 1.6) d = { dx: 0, dy: 0 };   // 死区：手悬停时画面不漂
+  const mag = Math.hypot(d.dx, d.dy);
+  if (mag < 1.6) d = { dx: 0, dy: 0 };   // 死区：手悬停时画面不漂
+
+  // 悬停选中：指着目标停住 ~1 秒即选中（光点白色填充显示进度）
+  const now = performance.now();
+  const dt = gesture.tPrev ? Math.min(100, now - gesture.tPrev) : 16;
+  gesture.tPrev = now;
+  if (gesture.dwellFired) {
+    if (mag > 7) gesture.dwellFired = false;      // 移开后才能再次蓄力
+    gesture.dwell = 0;
+  } else if (mag < 2.4 && dwellTarget(sx, sy)) {
+    gesture.dwell = (gesture.dwell || 0) + dt;
+    if (gesture.dwell >= 1000) {
+      gestureSelect(sx, sy);
+      gesture.dwellFired = true;
+      gesture.dwell = 0;
+    }
+  } else {
+    gesture.dwell = 0;
+  }
+  const dot2 = document.getElementById('gesture-dot');
+  if (dot2) dot2.style.setProperty('--dwell', Math.min(1, (gesture.dwell || 0) / 1000).toFixed(2));
 
   if (document.body.classList.contains('field-on') && activeField) {
     // 专辑页：横向挥手平移，纵向挥手向纵深飞行，捏合播放手指处的卡
     if (!pinching) {
       activeField.drag.xTarget += -d.dx * (activeField.sizes.width / window.innerWidth) * 2.0;
-      activeField.scrollY.target += d.dy * (activeField.sizes.height / window.innerHeight) * 3.4;
+      activeField.scrollY.target += d.dy * (activeField.sizes.height / window.innerHeight) * 5.6;
     }
-    if (pinchEdge) {
-      const cell = activeField.pickCell(sx, sy);
-      if (cell != null) playTrack(activeField.album.tracks[cell % activeField.album.tracks.length], activeField.album, cell);
-    }
+    if (pinchEdge) gestureSelect(sx, sy);
   } else if (document.body.classList.contains('ring-on') && window.__RING) {
     // 轮盘：横向挥手转动，捏合打开中间的专辑
     const r = window.__RING;
+    r.lastTouch = performance.now();     // 手在画面里就不触发自动轮换
     if (!pinching && d.dx !== 0) {
       r.rot += -d.dx / r.geom.pxPerStep * 2.3;
-      r.lastTouch = performance.now();
       r.dirty = true;
     }
-    if (pinchEdge && r.onOpen) {
-      const n = r.cards.length;
-      r.onOpen(r.cards[((Math.round(r.rot) % n) + n) % n].album);
-    }
+    if (pinchEdge) gestureSelect(sx, sy);
   }
 }
 
@@ -903,7 +954,7 @@ async function toggleGesture() {
 
     if (!gesture.hands) {
       gesture.hands = new window.Hands({ locateFile: (f) => 'assets/vendor/mediapipe-hands/' + f });
-      gesture.hands.setOptions({ maxNumHands: 1, modelComplexity: 0, selfieMode: true,
+      gesture.hands.setOptions({ maxNumHands: 1, modelComplexity: 1, selfieMode: true,
                                  minDetectionConfidence: 0.6, minTrackingConfidence: 0.5 });
       gesture.hands.onResults(onHandResults);
       await gesture.hands.initialize();      // 等 wasm/模型就绪，避免边加载边送帧导致闪烁
@@ -912,7 +963,7 @@ async function toggleGesture() {
     gesture.on = true;
     btn.classList.remove('loading');
     btn.classList.add('on');
-    showNote('手势已开启：挥手转动 / 捏合选中');
+    showNote('手势已开启：挥手转动 · 指住目标停 1 秒选中');
     let busy = false, fails = 0;
     const loop = () => {
       if (!gesture.on) return;
