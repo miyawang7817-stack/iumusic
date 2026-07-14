@@ -843,8 +843,23 @@ async function toggleGesture() {
     }
     const video = document.getElementById('gesture-cam');
     video.setAttribute('autoplay', '');
-    video.srcObject = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 360, facingMode: 'user' } });
+    try {
+      video.srcObject = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 360, facingMode: 'user' } });
+    } catch (_) {
+      video.srcObject = await navigator.mediaDevices.getUserMedia({ video: true });   // 低配回退
+    }
     await video.play();
+    // 等到真正出画面为止——拿到设备但黑/灰屏（被占用、系统隐私拦截）在这里判定
+    await new Promise((resolve, reject) => {
+      const to = setTimeout(() => reject(new DOMException('no frames', 'NoFramesError')), 5000);
+      const ok = () => { clearTimeout(to); resolve(); };
+      if ('requestVideoFrameCallback' in video) video.requestVideoFrameCallback(ok);
+      else {
+        const iv = setInterval(() => {
+          if (video.videoWidth > 0 && video.currentTime > 0) { clearInterval(iv); ok(); }
+        }, 120);
+      }
+    });
     if (!gesture.hands) {
       gesture.hands = new window.Hands({ locateFile: (f) => 'assets/vendor/mediapipe-hands/' + f });
       gesture.hands.setOptions({ maxNumHands: 1, modelComplexity: 0, selfieMode: true,
@@ -876,9 +891,21 @@ async function toggleGesture() {
     requestAnimationFrame(loop);
   } catch (err) {
     console.error('手势启动失败：', err);
-    btn.classList.remove('loading');
+    const video = document.getElementById('gesture-cam');
+    video.srcObject?.getTracks().forEach((t) => t.stop());   // 清理半开状态
+    video.srcObject = null;
+    video.hidden = true;
+    btn.classList.remove('loading', 'on');
+    gesture.on = false;
     gesture.loading = false;
-    showNote('无法启用摄像头（需要授权，且此环境需支持摄像头）');
+    const msg = {
+      NotAllowedError: '摄像头权限被拒绝 — 点地址栏右侧的相机图标允许后重试',
+      NotReadableError: '摄像头被其他应用占用（微信/会议/OBS 等）— 关闭它们后重试',
+      AbortError: '摄像头启动被中断 — 关闭占用相机的应用后重试',
+      NoFramesError: '摄像头无画面 — 检查系统设置→隐私→相机 是否允许浏览器',
+      NotFoundError: '未检测到摄像头设备',
+    }[err.name] || '无法启用摄像头（此环境可能不支持）';
+    showNote(msg);
     return;
   }
   gesture.loading = false;

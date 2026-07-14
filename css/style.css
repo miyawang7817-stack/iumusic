@@ -69,8 +69,6 @@ footer {
   grid-template-columns: repeat(12, 1fr);
   font-size: max(1em, 1.2vmax);
 }
-.f2 { grid-column-start: 3; }
-.f3 { grid-column-start: 5; }
 .f-scroll {
   grid-column-end: 13;
   justify-self: end;
