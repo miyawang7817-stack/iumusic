@@ -794,7 +794,7 @@ function onHandResults(res) {
     if (label && gesture.on) label.textContent = `GESTURE ${gesture.fps}FPS`;
   }
   const lm = res.multiHandLandmarks && res.multiHandLandmarks[0];
-  if (!lm) { gesture.hand = null; return; }
+  if (!lm) { gesture.hand = null; gesture.prevSample = null; return; }
   const palm = lm[9];
   const handSize = Math.hypot(lm[0].x - lm[9].x, lm[0].y - lm[9].y) || 1e-6;
   gesture.hand = {
@@ -803,6 +803,13 @@ function onHandResults(res) {
     pinchRatio: Math.hypot(lm[4].x - lm[8].x, lm[4].y - lm[8].y) / handSize,
     t: performance.now(),
   };
+  // 手速按识别样本算（px/s）：低帧率下 rAF 侧的逐帧位移会误判静止，这里才是真值
+  const prev = gesture.prevSample;
+  if (prev) {
+    gesture.handSpeed = Math.hypot(gesture.hand.x - prev.x, gesture.hand.y - prev.y)
+      / Math.max(0.016, (gesture.hand.t - prev.t) / 1000);
+  }
+  gesture.prevSample = gesture.hand;
 }
 
 /* 中心目标是否可选 / 选中它（轮盘=中间专辑，专辑页=屏幕中心最近卡） */
@@ -838,6 +845,8 @@ function gestureControlLoop() {
     gesture.dwell = 0;
     gesture.dotInit = false;
     gesture.anchor = null;                                    // 手离开：清锚点，下次重新锚定
+    gesture.pinchStamp = 0;
+    gesture.handSpeed = 0;
     if (window.__RING) window.__RING.gestureActive = false;   // 恢复自动轮换
     return;
   }
@@ -861,6 +870,10 @@ function gestureControlLoop() {
 
   const pinching = h.pinchRatio < (gesture.pinch ? 0.6 : 0.42);
   gesture.pinch = pinching;
+  // 捏合必须持续一段时间才算数：快速挥手的运动模糊会让单帧关键点乱跳、误报捏合
+  if (pinching && !gesture.pinchStamp) gesture.pinchStamp = now;
+  if (!pinching) gesture.pinchStamp = 0;
+  const pinchHeld = pinching && now - gesture.pinchStamp > 220;
   if (dot) {
     dot.hidden = false;
     dot.style.transform = `translate(${(gesture.dotX - 13).toFixed(1)}px, ${(gesture.dotY - 13).toFixed(1)}px)`;
@@ -886,19 +899,19 @@ function gestureControlLoop() {
   let ddy = gesture.dotY - gesture.prevDotY;
   gesture.prevDotX = gesture.dotX;
   gesture.prevDotY = gesture.dotY;
-  if (Math.hypot(ddx, ddy) > 0.8) gesture.moveStamp = now;
+  if (Math.hypot(ddx, ddy) > 0.8 || (gesture.handSpeed || 0) > 90) gesture.moveStamp = now;
   const restedMs = now - (gesture.moveStamp || 0);
   const still = restedMs > 120;
 
-  // 选中：光点移到画面中央、停住 0.8 秒（捏合立即）；停在别处只是停
+  // 选中一律以"手已停稳"为前提：挥动途中绝不触发。停在中央 0.8 秒或停稳后捏合 0.22 秒
   const cx = window.innerWidth / 2, cy = window.innerHeight / 2;
   const nearCenter = Math.hypot(gesture.dotX - cx, gesture.dotY - cy) < Math.min(window.innerWidth, window.innerHeight) * 0.16;
   if (gesture.dwellFired) {
     if (!still && !pinching) gesture.dwellFired = false;
     gesture.dwell = 0;
-  } else if ((pinching || (still && nearCenter)) && centerTarget()) {
+  } else if (still && (pinchHeld || nearCenter) && centerTarget()) {
     gesture.dwell += dt * 1000;
-    if (pinching || gesture.dwell >= 800) { selectCenter(); gesture.dwellFired = true; gesture.dwell = 0; }
+    if (pinchHeld || gesture.dwell >= 800) { selectCenter(); gesture.dwellFired = true; gesture.dwell = 0; }
   } else {
     gesture.dwell = 0;
   }
