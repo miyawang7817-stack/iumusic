@@ -508,6 +508,7 @@ class CoverRing {
     this.buildDom();
     this.measureGeom();
     this.bindInput();
+    window.__RING = this;             // 调试/测试用
     window.addEventListener('resize', () => { this.measureGeom(); this.dirty = true; });
   }
 
@@ -761,6 +762,117 @@ class CoverRing {
       }
     });
   }
+}
+
+/* ---------- 摄像头手势控制（可选）：挥手转轮盘/平移，捏合(拇指+食指)选中 ----------
+   手部识别用 MediaPipe Hands，模型与 wasm 全部自托管于 assets/vendor/mediapipe-hands/ */
+
+const gesture = { on: false, loading: false, video: null, hands: null, last: null, pinch: false };
+
+function gestureDot(x, y, pinching) {
+  let dot = document.getElementById('gesture-dot');
+  if (!dot) return;
+  dot.hidden = false;
+  dot.style.transform = `translate(${x - 11}px, ${y - 11}px) scale(${pinching ? 0.6 : 1})`;
+  dot.classList.toggle('pinch', pinching);
+}
+
+function onHandResults(res) {
+  if (!gesture.on) return;
+  const lm = res.multiHandLandmarks && res.multiHandLandmarks[0];
+  const dot = document.getElementById('gesture-dot');
+  if (!lm) { gesture.last = null; if (dot) dot.hidden = true; return; }
+
+  const palm = lm[9];
+  const sx = palm.x * window.innerWidth;
+  const sy = palm.y * window.innerHeight;
+  const pinching = Math.hypot(lm[4].x - lm[8].x, lm[4].y - lm[8].y) < 0.055;
+  const pinchEdge = pinching && !gesture.pinch;
+  gesture.pinch = pinching;
+  gestureDot(sx, sy, pinching);
+
+  const d = gesture.last ? { dx: sx - gesture.last.sx, dy: sy - gesture.last.sy } : { dx: 0, dy: 0 };
+  gesture.last = { sx, sy };
+
+  if (document.body.classList.contains('field-on') && activeField) {
+    // 专辑页：横向挥手平移，纵向挥手向纵深飞行，捏合播放手指处的卡
+    if (!pinching) {
+      activeField.drag.xTarget += -d.dx * (activeField.sizes.width / window.innerWidth) * 1.4;
+      activeField.scrollY.target += d.dy * (activeField.sizes.height / window.innerHeight) * 2.4;
+    }
+    if (pinchEdge) {
+      const cell = activeField.pickCell(sx, sy);
+      if (cell != null) playTrack(activeField.album.tracks[cell % activeField.album.tracks.length], activeField.album, cell);
+    }
+  } else if (document.body.classList.contains('ring-on') && window.__RING) {
+    // 轮盘：横向挥手转动，捏合打开中间的专辑
+    const r = window.__RING;
+    if (!pinching && Math.abs(d.dx) > 1) {
+      r.rot += -d.dx / r.geom.pxPerStep * 1.2;
+      r.lastTouch = performance.now();
+      r.dirty = true;
+    }
+    if (pinchEdge && r.onOpen) {
+      const n = r.cards.length;
+      r.onOpen(r.cards[((Math.round(r.rot) % n) + n) % n].album);
+    }
+  }
+}
+
+async function toggleGesture() {
+  const btn = document.getElementById('btn-gesture');
+  if (gesture.on) {                      // 关闭
+    gesture.on = false;
+    btn.classList.remove('on');
+    gesture.video?.srcObject?.getTracks().forEach((t) => t.stop());
+    document.getElementById('gesture-cam').hidden = true;
+    document.getElementById('gesture-dot').hidden = true;
+    return;
+  }
+  if (gesture.loading) return;
+  gesture.loading = true;
+  btn.classList.add('loading');
+  try {
+    if (!window.Hands) {
+      await new Promise((res, rej) => {
+        const sc = document.createElement('script');
+        sc.src = 'assets/vendor/mediapipe-hands/hands.js';
+        sc.onload = res; sc.onerror = rej;
+        document.head.appendChild(sc);
+      });
+    }
+    const video = document.getElementById('gesture-cam');
+    video.srcObject = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 360, facingMode: 'user' } });
+    await video.play();
+    if (!gesture.hands) {
+      gesture.hands = new window.Hands({ locateFile: (f) => 'assets/vendor/mediapipe-hands/' + f });
+      gesture.hands.setOptions({ maxNumHands: 1, modelComplexity: 0, selfieMode: true,
+                                 minDetectionConfidence: 0.6, minTrackingConfidence: 0.5 });
+      gesture.hands.onResults(onHandResults);
+    }
+    gesture.video = video;
+    gesture.on = true;
+    video.hidden = false;
+    btn.classList.remove('loading');
+    btn.classList.add('on');
+    showNote('手势已开启：挥手转动 / 捏合选中');
+    let tick = 0;
+    const loop = async () => {
+      if (!gesture.on) return;
+      if (tick++ % 2 === 0 && video.readyState >= 2) {
+        try { await gesture.hands.send({ image: video }); } catch (_) {}
+      }
+      requestAnimationFrame(loop);
+    };
+    requestAnimationFrame(loop);
+  } catch (err) {
+    console.error('手势启动失败：', err);
+    btn.classList.remove('loading');
+    gesture.loading = false;
+    showNote('无法启用摄像头（需要授权，且此环境需支持摄像头）');
+    return;
+  }
+  gesture.loading = false;
 }
 
 /* ---------- 专辑播放器卡片场（参照 J0SUKE/spotify-visualiser） ----------
@@ -1083,7 +1195,12 @@ class PlayerField {
       this.drag.lastX = e.clientX;
       this.drag.lastY = e.clientY;
       this.drag.xTarget += -dx * (this.sizes.width / window.innerWidth);
-      this.drag.yTarget += dy * (this.sizes.height / window.innerHeight);
+      if (e.pointerType === 'touch') {
+        // 触屏：竖划 = 向纵深飞行（手机没有滚轮）
+        this.scrollY.target += dy * (this.sizes.height / window.innerHeight) * 2.2;
+      } else {
+        this.drag.yTarget += dy * (this.sizes.height / window.innerHeight);
+      }
     };
     this.onUp = (e) => {
       this.drag.isDown = false;
@@ -1317,6 +1434,7 @@ preloadCovers().then(() => {
     const canvas = new Canvas();
     document.getElementById('btn-ring-back').addEventListener('click', () => canvas.closeAlbum());
     document.getElementById('np-toggle').addEventListener('click', () => player.title && playTrack(player.title));
+    document.getElementById('btn-gesture').addEventListener('click', toggleGesture);
   } catch (err) {
     console.error('WebGL 初始化失败，退回封面墙：', err);
     showFallbackWall();
