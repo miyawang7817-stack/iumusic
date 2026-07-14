@@ -1,0 +1,70 @@
+name: Record demo video
+
+# 手动触发：Actions 页面点 Run workflow（或 API dispatch）。
+# 在 GitHub 服务器上打开线上站点，虚拟时钟逐帧录制 → 合成配乐 → 发布为 demo-video Release
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: 要录制的站点地址
+        required: false
+        default: https://miyawang7817-stack.github.io/iumusic/
+
+permissions:
+  contents: write
+
+jobs:
+  record:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    env:
+      SITE_URL: ${{ github.event.inputs.url || 'https://miyawang7817-stack.github.io/iumusic/' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: 安装依赖（ffmpeg / numpy / playwright）
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q ffmpeg python3-numpy
+          cd demo && npm init -y > /dev/null && npm install playwright > /dev/null
+
+      - name: 生成配乐
+        run: python3 demo/music.py demo/music.wav
+
+      - name: 录制横版 1920x1080
+        working-directory: demo
+        run: node capture.mjs 1920 1080 fr169 "$SITE_URL"
+
+      - name: 录制竖版 1080x1920
+        working-directory: demo
+        run: node capture.mjs 1080 1920 fr916 "$SITE_URL"
+
+      - name: 合成编码
+        run: |
+          for v in "fr169:iu-magazine-demo-h.mp4" "fr916:iu-magazine-demo-v.mp4"; do
+            d=${v%%:*}; o=${v##*:}
+            ffmpeg -y -framerate 30 -i demo/$d/f%05d.jpg -i demo/music.wav \
+              -filter_complex "[0:v]format=yuv420p[v];[1:a]atrim=0:43.5,afade=t=out:st=40:d=3.4[a]" \
+              -map "[v]" -map "[a]" -c:v libx264 -crf 18 -preset medium -c:a aac -b:a 192k \
+              -movflags +faststart "$o" -loglevel error
+          done
+          ls -la iu-magazine-demo-*.mp4
+
+      - name: 上传为运行产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: iu-magazine-demo
+          path: iu-magazine-demo-*.mp4
+
+      - name: 发布为 Release（demo-video）
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete demo-video --cleanup-tag -y || true
+          gh release create demo-video iu-magazine-demo-h.mp4 iu-magazine-demo-v.mp4 \
+            --title "IU Magazine 演示视频" \
+            --notes "自动录制于 $SITE_URL（横版 1920x1080 + 竖版 1080x1920，30fps）"
