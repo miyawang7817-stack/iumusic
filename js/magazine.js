@@ -843,15 +843,10 @@ async function toggleGesture() {
     }
     const video = document.getElementById('gesture-cam');
     video.setAttribute('autoplay', '');
-    try {
-      video.srcObject = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 360, facingMode: 'user' } });
-    } catch (_) {
-      video.srcObject = await navigator.mediaDevices.getUserMedia({ video: true });   // 低配回退
-    }
-    await video.play();
-    // 等到真正出画面为止——拿到设备但黑/灰屏（被占用、系统隐私拦截）在这里判定
-    await new Promise((resolve, reject) => {
-      const to = setTimeout(() => reject(new DOMException('no frames', 'NoFramesError')), 5000);
+
+    // 等真正出画面（虚拟摄像头/被占用的设备会拿到流但没有帧）
+    const firstFrame = (ms) => new Promise((resolve, reject) => {
+      const to = setTimeout(() => reject(new DOMException('no frames', 'NoFramesError')), ms);
       const ok = () => { clearTimeout(to); resolve(); };
       if ('requestVideoFrameCallback' in video) video.requestVideoFrameCallback(ok);
       else {
@@ -860,6 +855,31 @@ async function toggleGesture() {
         }, 120);
       }
     });
+    const tryStream = async (constraints) => {
+      let stream;
+      try { stream = await navigator.mediaDevices.getUserMedia(constraints); } catch (_) { return false; }
+      video.srcObject = stream;
+      try { await video.play(); await firstFrame(3500); return true; }
+      catch (_) {
+        stream.getTracks().forEach((t) => t.stop());
+        video.srcObject = null;
+        return false;
+      }
+    };
+
+    // 1) 先试默认摄像头；2) 没画面则枚举全部设备，优先真实摄像头（跳过 Virtual/OBS 等虚拟设备）
+    let opened = await tryStream({ video: { width: 640, height: 360, facingMode: 'user' } });
+    if (!opened) {
+      const devs = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === 'videoinput');
+      const isVirtual = (d) => /virtual|obs|snap ?camera|droidcam|iriun|ndi|unity/i.test(d.label);
+      devs.sort((a, b) => isVirtual(a) - isVirtual(b));
+      for (const d of devs) {
+        opened = await tryStream({ video: { deviceId: { exact: d.deviceId } } });
+        if (opened) break;
+      }
+    }
+    if (!opened) throw new DOMException('no frames', 'NoFramesError');
+
     if (!gesture.hands) {
       gesture.hands = new window.Hands({ locateFile: (f) => 'assets/vendor/mediapipe-hands/' + f });
       gesture.hands.setOptions({ maxNumHands: 1, modelComplexity: 0, selfieMode: true,
@@ -902,7 +922,7 @@ async function toggleGesture() {
       NotAllowedError: '摄像头权限被拒绝 — 点地址栏右侧的相机图标允许后重试',
       NotReadableError: '摄像头被其他应用占用（微信/会议/OBS 等）— 关闭它们后重试',
       AbortError: '摄像头启动被中断 — 关闭占用相机的应用后重试',
-      NoFramesError: '摄像头无画面 — 检查系统设置→隐私→相机 是否允许浏览器',
+      NoFramesError: '所有摄像头都没有画面 — 若默认是 Virtual Camera（虚拟摄像头），请在浏览器设置里换成真实摄像头，或关闭占用相机的应用',
       NotFoundError: '未检测到摄像头设备',
     }[err.name] || '无法启用摄像头（此环境可能不支持）';
     showNote(msg);
