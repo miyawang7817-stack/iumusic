@@ -917,7 +917,8 @@ function gestureControlLoop() {
   }
 
   // 挥动触发：窗口内净位移超过屏幕短边的 11%，取主导轴。
-  // 反向锁：上次挥动后 0.9s 内的反方向大位移视为回手，吞掉不触发
+  // 反向锁：上次挥动后 1.8s 内的反方向"弱"位移视为回手吞掉——回程是懒的；
+  // 若反向位移超过阈值 2 倍（猛挥），视为有意反向，照样放行
   if (gesture.swipeArmed && !pinching) {
     const horiz = Math.abs(wdx) > dim * 0.11 && Math.abs(wdx) > Math.abs(wdy) * 1.3;
     const vert = Math.abs(wdy) > dim * 0.11 && Math.abs(wdy) > Math.abs(wdx) * 1.3;
@@ -925,8 +926,10 @@ function gestureControlLoop() {
     if (horiz || vert) {
       const axis = horiz ? 'h' : 'v';
       const dirn = horiz ? Math.sign(wdx) : Math.sign(wdy);
+      const mag = horiz ? Math.abs(wdx) : Math.abs(wdy);
       const reversed = now < (gesture.dirLockUntil || 0)
-        && (gesture.lastAxis !== axis || gesture.lastDir !== dirn);
+        && (gesture.lastAxis !== axis || gesture.lastDir !== dirn)
+        && mag < dim * 0.22;
       if (!reversed) {
         if (fieldOn) {
           if (horiz) activeField.drag.xTarget += (wdx < 0 ? 1 : -1) * activeField.sizes.width * 0.55;
@@ -935,9 +938,11 @@ function gestureControlLoop() {
           const r = window.__RING;
           r.animateRotTo(Math.round(r.rot) + (wdx < 0 ? 1 : -1), 520);  // 一次挥动固定翻一张，节奏可预期
         }
-        gesture.lastAxis = axis; gesture.lastDir = dirn; gesture.dirLockUntil = now + 900;
+        gesture.lastAxis = axis; gesture.lastDir = dirn; gesture.dirLockUntil = now + 1800;
+        gesture.swipeArmed = false; gesture.swipeCool = now + 500; s.length = 0;
       }
-      gesture.swipeArmed = false; gesture.swipeCool = now + (reversed ? 300 : 500); s.length = 0;
+      // 弱反向（回手）不消费也不清样本：笔画若继续发力、净位移过 2 倍阈值，
+      // 上面的 reversed 判定自然翻转为有意反挥并放行；懒回程则自然衰减掉
     }
   }
 
