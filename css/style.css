@@ -299,3 +299,51 @@ body.field-on #album-view { opacity: 1; }
   padding: 0;
 }
 .np-tag { font-size: 10px; letter-spacing: 0.2em; color: rgba(255, 251, 235, 0.4); }
+
+/* 手势控制 */
+#btn-gesture {
+  position: fixed;
+  top: calc(3vmax + 56px);
+  right: 3vmax;
+  z-index: 12;
+  width: 44px;
+  height: 44px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 251, 235, 0.28);
+  background: rgba(19, 19, 19, 0.55);
+  font-size: 19px;
+  cursor: pointer;
+  transition: border-color 200ms, box-shadow 200ms, opacity 200ms;
+  filter: grayscale(1) brightness(1.6);
+}
+#btn-gesture:hover { border-color: rgba(255, 251, 235, 0.55); }
+#btn-gesture.loading { opacity: 0.5; }
+#btn-gesture.on {
+  border-color: #c9b8ff;
+  box-shadow: 0 0 14px rgba(201, 184, 255, 0.45);
+  filter: none;
+}
+#gesture-cam {
+  position: fixed;
+  left: 3vmax;
+  top: calc(3vmax + 56px);
+  z-index: 12;
+  width: 148px;
+  border-radius: 10px;
+  transform: scaleX(-1);
+  opacity: 0.85;
+  border: 1px solid rgba(255, 251, 235, 0.25);
+}
+#gesture-cam[hidden], #gesture-dot[hidden] { display: none; }
+#gesture-dot {
+  position: fixed;
+  left: 0; top: 0;
+  z-index: 14;
+  width: 22px; height: 22px;
+  border-radius: 999px;
+  background: rgba(201, 184, 255, 0.85);
+  box-shadow: 0 0 18px rgba(201, 184, 255, 0.8);
+  pointer-events: none;
+  transition: transform 60ms linear;
+}
+#gesture-dot.pinch { background: #fff; }
