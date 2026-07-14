@@ -782,6 +782,17 @@ const gesture = {
 
 /* 识别回调只做一件事：记录最新手位。控制在独立的 60fps 循环里做，二者解耦 */
 function onHandResults(res) {
+  // 识别帧率统计（诊断用，显示在 GESTURE 按钮上）
+  const t = performance.now();
+  gesture.fpsCount = (gesture.fpsCount || 0) + 1;
+  if (!gesture.fpsStamp) gesture.fpsStamp = t;
+  if (t - gesture.fpsStamp >= 1000) {
+    gesture.fps = gesture.fpsCount;
+    gesture.fpsCount = 0;
+    gesture.fpsStamp = t;
+    const label = document.querySelector('#btn-gesture span');
+    if (label && gesture.on) label.textContent = `GESTURE ${gesture.fps}FPS`;
+  }
   const lm = res.multiHandLandmarks && res.multiHandLandmarks[0];
   if (!lm) { gesture.hand = null; return; }
   const palm = lm[9];
@@ -826,7 +837,8 @@ function gestureControlLoop() {
     if (dot) dot.hidden = true;
     gesture.dwell = 0;
     gesture.dotInit = false;
-    if (window.__RING) window.__RING.gestureActive = false;   // 手离开：恢复自动轮换
+    gesture.anchor = null;                                    // 手离开：清锚点，下次重新锚定
+    if (window.__RING) window.__RING.gestureActive = false;   // 恢复自动轮换
     return;
   }
 
@@ -855,18 +867,30 @@ function gestureControlLoop() {
     dot.classList.toggle('pinch', pinching);
   }
 
-  // 1:1 直控：对平滑后光点求帧间位移，手动多少转多少，手停即停、往回即反向
+  // 绝对锚定：手出现的那一刻记录锚点，此后场景位置 = f(手相对锚点的位移)。
+  // 像捏着实体旋钮——不累积误差，掉帧/抖动都不会漂。
+  if (!gesture.anchor) {
+    gesture.anchor = {
+      x: gesture.dotX, y: gesture.dotY,
+      rot: window.__RING ? window.__RING.rot : 0,
+      dragX: activeField ? activeField.drag.xTarget : 0,
+      scroll: activeField ? activeField.scrollY.target : 0,
+    };
+    gesture.moveStamp = now;
+  }
+  const offX = gesture.dotX - gesture.anchor.x;
+  const offY = gesture.dotY - gesture.anchor.y;
+
+  // 静止检测（用于吸附与选中）
   let ddx = gesture.dotX - gesture.prevDotX;
   let ddy = gesture.dotY - gesture.prevDotY;
   gesture.prevDotX = gesture.dotX;
   gesture.prevDotY = gesture.dotY;
-  if (Math.abs(ddx) < 0.35) ddx = 0;      // 抖动死区
-  if (Math.abs(ddy) < 0.35) ddy = 0;
-  if (ddx !== 0 || ddy !== 0) gesture.moveStamp = now;
-  const still = ddx === 0 && ddy === 0;
-  const restedMs = now - (gesture.moveStamp || 0);   // 手静止了多久
+  if (Math.hypot(ddx, ddy) > 0.8) gesture.moveStamp = now;
+  const restedMs = now - (gesture.moveStamp || 0);
+  const still = restedMs > 120;
 
-  // 选中：光点移到画面中央、停住 0.8 秒（捏合可立即触发）；停在别处只是停、不误选
+  // 选中：光点移到画面中央、停住 0.8 秒（捏合立即）；停在别处只是停
   const cx = window.innerWidth / 2, cy = window.innerHeight / 2;
   const nearCenter = Math.hypot(gesture.dotX - cx, gesture.dotY - cy) < Math.min(window.innerWidth, window.innerHeight) * 0.16;
   if (gesture.dwellFired) {
@@ -880,22 +904,18 @@ function gestureControlLoop() {
   }
   if (dot) dot.style.setProperty('--dwell', Math.min(1, gesture.dwell / 800).toFixed(2));
 
-  // 施加运动（选中蓄力中不移动，避免手抖乱动）
-  const moving = !(gesture.dwell > 0);
-  if (moving) {
-    if (document.body.classList.contains('field-on') && activeField) {
-      activeField.drag.xTarget += -ddx * (activeField.sizes.width / window.innerWidth) * 2.2;   // 手左右 = 平移
-      activeField.scrollY.target += -ddy * (activeField.sizes.height / window.innerHeight) * 4.6; // 手上抬 = 向前飞
-    } else if (document.body.classList.contains('ring-on') && window.__RING) {
-      const r = window.__RING;
-      if (ddx !== 0) {
-        r.rot += -ddx / r.geom.pxPerStep * 1.5;      // 手动多少转多少，手停即停、往回即反向
-        r.dirty = true;
-      } else if (restedMs > 300) {
-        r.rot += (Math.round(r.rot) - r.rot) * 0.3;  // 真正静止后才吸附到最近专辑（扫动中不打架）
-        r.dirty = true;
-      }
+  // 绝对映射施加位置
+  if (document.body.classList.contains('field-on') && activeField) {
+    activeField.drag.xTarget = gesture.anchor.dragX + -offX * (activeField.sizes.width / window.innerWidth) * 2.2;
+    activeField.scrollY.target = gesture.anchor.scroll + -offY * (activeField.sizes.height / window.innerHeight) * 4.2;
+  } else if (document.body.classList.contains('ring-on') && window.__RING) {
+    const r = window.__RING;
+    r.rot = gesture.anchor.rot + -offX / r.geom.pxPerStep * 1.6;
+    if (still && restedMs > 350) {
+      // 真正静止后向最近专辑吸附：移动锚点而不是直接改 rot，与绝对映射不冲突
+      gesture.anchor.rot += (Math.round(r.rot) - r.rot) * 0.25;
     }
+    r.dirty = true;
   }
 }
 
@@ -908,8 +928,11 @@ async function toggleGesture() {
     gesture.ctrlLoop = null;
     gesture.hand = null;
     gesture.dotInit = false;
+    gesture.anchor = null;
     if (window.__RING) window.__RING.gestureActive = false;
     btn.classList.remove('on');
+    const label = document.querySelector('#btn-gesture span');
+    if (label) label.textContent = 'GESTURE';
     gesture.video?.srcObject?.getTracks().forEach((t) => t.stop());
     document.getElementById('gesture-dot').hidden = true;
     return;
