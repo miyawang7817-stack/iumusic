@@ -508,6 +508,7 @@ class CoverRing {
     this.buildDom();
     this.measureGeom();
     this.bindInput();
+    window.__RING = this;             // 调试/测试用
     window.addEventListener('resize', () => { this.measureGeom(); this.dirty = true; });
   }
 
