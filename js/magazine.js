@@ -775,8 +775,10 @@ class CoverRing {
 const gesture = {
   on: false, loading: false, video: null, hands: null,
   hand: null,               // 最新识别：{x, y, pinchRatio, t}（归一化到屏幕像素）
-  dotX: 0, dotY: 0, prevDotX: 0, prevDotY: 0, dotInit: false,
-  pinch: false, dwell: 0, dwellFired: false,
+  samples: [],              // 最近 350ms 的识别样本，用于抗抖动的静止判定
+  dotX: 0, dotY: 0, dotInit: false,
+  pinch: false, dwell: 0, dwellFired: false, stillStamp: 0,
+  swipeArmed: true, swipeCool: 0,
   detTimer: null, ctrlLoop: null, tPrev: 0,
 };
 
@@ -794,23 +796,26 @@ function onHandResults(res) {
     if (label && gesture.on) label.textContent = `GESTURE ${gesture.fps}FPS`;
   }
   const lm = res.multiHandLandmarks && res.multiHandLandmarks[0];
-  if (!lm) { gesture.hand = null; gesture.prevSample = null; return; }
+  if (!lm) { gesture.hand = null; gesture.samples.length = 0; return; }
   const palm = lm[9];
   const handSize = Math.hypot(lm[0].x - lm[9].x, lm[0].y - lm[9].y) || 1e-6;
-  gesture.hand = {
-    x: palm.x * window.innerWidth,
-    y: palm.y * window.innerHeight,
-    pinchRatio: Math.hypot(lm[4].x - lm[8].x, lm[4].y - lm[8].y) / handSize,
-    t: performance.now(),
-  };
-  // 手速按识别样本算（px/s）：低帧率下 rAF 侧的逐帧位移会误判静止，这里才是真值
-  const prev = gesture.prevSample;
-  if (prev) {
-    gesture.handSpeed = Math.hypot(gesture.hand.x - prev.x, gesture.hand.y - prev.y)
-      / Math.max(0.016, (gesture.hand.t - prev.t) / 1000);
-  }
-  gesture.prevSample = gesture.hand;
+  feedHand(
+    palm.x * window.innerWidth,
+    palm.y * window.innerHeight,
+    Math.hypot(lm[4].x - lm[8].x, lm[4].y - lm[8].y) / handSize
+  );
 }
+
+/* 识别样本入口（也是测试注入点）：记录最新手位 + 维护 350ms 样本窗口 */
+function feedHand(x, y, pinchRatio) {
+  const t = performance.now();
+  gesture.hand = { x, y, pinchRatio, t };
+  gesture.samples.push({ t, x, y });
+  while (gesture.samples.length && t - gesture.samples[0].t > 350) gesture.samples.shift();
+}
+window.__GESTURE = gesture;
+window.__feedHand = feedHand;
+window.__testCtrlOnly = () => { gesture.on = true; if (!gesture.ctrlLoop) gestureControlLoop(); };
 
 /* 中心目标是否可选 / 选中它（轮盘=中间专辑，专辑页=屏幕中心最近卡） */
 function centerTarget() {
@@ -828,7 +833,10 @@ function selectCenter() {
   }
 }
 
-/* 摇杆控制循环（60fps，与识别帧率无关）：手离屏幕中心的偏移 → 连续速度 */
+/* 手势控制循环（60fps，与识别帧率解耦）——离散挥动模型：
+   快速挥一下 = 翻一步（轮盘走原生吸附动画）；慢速移动只移光标、绝不带动画面；
+   光点停在画面中央 0.8s（或停稳后捏合 0.22s）= 选中。
+   挥动后 0.5s 内反向不触发，回手不会把刚翻过去的又翻回来 */
 function gestureControlLoop() {
   if (!gesture.on) { gesture.ctrlLoop = null; return; }
   gesture.ctrlLoop = requestAnimationFrame(gestureControlLoop);
@@ -844,29 +852,21 @@ function gestureControlLoop() {
     if (dot) dot.hidden = true;
     gesture.dwell = 0;
     gesture.dotInit = false;
-    gesture.anchor = null;                                    // 手离开：清锚点，下次重新锚定
     gesture.pinchStamp = 0;
-    gesture.handSpeed = 0;
-    if (window.__RING) window.__RING.gestureActive = false;   // 恢复自动轮换
+    gesture.swipeArmed = true;
     return;
   }
+
+  // 手在画面里时不自动轮换（但不抢占吸附/翻页动画，它们本来就是我们要的落点）
+  if (window.__RING) window.__RING.lastTouch = now;
 
   // 光点平滑跟随（轻微 EMA，低延迟）
   if (!gesture.dotInit) {
     gesture.dotX = h.x; gesture.dotY = h.y;
-    gesture.prevDotX = h.x; gesture.prevDotY = h.y;   // 重捕捉时不产生跳变位移
     gesture.dotInit = true;
   }
   gesture.dotX += (h.x - gesture.dotX) * 0.5;
   gesture.dotY += (h.y - gesture.dotY) * 0.5;
-
-  // 有新鲜手就立刻接管轮盘（在任何 dwell/移动判定之前），彻底断开自动轮换
-  if (window.__RING && !window.__RING.gestureActive) {
-    window.__RING.gestureActive = true;
-    cancelAnimationFrame(window.__RING.anim);
-    window.__RING.snapping = false;
-    window.__RING.inertia = false;
-  }
 
   const pinching = h.pinchRatio < (gesture.pinch ? 0.6 : 0.42);
   gesture.pinch = pinching;
@@ -880,56 +880,55 @@ function gestureControlLoop() {
     dot.classList.toggle('pinch', pinching);
   }
 
-  // 绝对锚定：手出现的那一刻记录锚点，此后场景位置 = f(手相对锚点的位移)。
-  // 像捏着实体旋钮——不累积误差，掉帧/抖动都不会漂。
-  if (!gesture.anchor) {
-    gesture.anchor = {
-      x: gesture.dotX, y: gesture.dotY,
-      rot: window.__RING ? window.__RING.rot : 0,
-      dragX: activeField ? activeField.drag.xTarget : 0,
-      scroll: activeField ? activeField.scrollY.target : 0,
-    };
-    gesture.moveStamp = now;
+  // 350ms 识别样本窗口的净位移与包围盒：既是挥动判定也是静止判定的依据。
+  // 用识别样本而非光点逐帧位移——抗关键点固有抖动，也不受识别帧率影响
+  const s = gesture.samples;
+  let minX = 1e9, maxX = -1e9, minY = 1e9, maxY = -1e9;
+  for (const p of s) {
+    if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x;
+    if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y;
   }
-  const offX = gesture.dotX - gesture.anchor.x;
-  const offY = gesture.dotY - gesture.anchor.y;
+  const vw = window.innerWidth, vh = window.innerHeight, dim = Math.min(vw, vh);
+  const spread = s.length >= 2 ? Math.hypot(maxX - minX, maxY - minY) : 1e9;
+  const still = spread < dim * 0.035;
+  if (!still) gesture.stillStamp = now;
+  const restedMs = now - gesture.stillStamp;
+  const wdx = s.length >= 2 ? s[s.length - 1].x - s[0].x : 0;
+  const wdy = s.length >= 2 ? s[s.length - 1].y - s[0].y : 0;
 
-  // 静止检测（用于吸附与选中）
-  let ddx = gesture.dotX - gesture.prevDotX;
-  let ddy = gesture.dotY - gesture.prevDotY;
-  gesture.prevDotX = gesture.dotX;
-  gesture.prevDotY = gesture.dotY;
-  if (Math.hypot(ddx, ddy) > 0.8 || (gesture.handSpeed || 0) > 90) gesture.moveStamp = now;
-  const restedMs = now - (gesture.moveStamp || 0);
-  const still = restedMs > 120;
+  // 挥动重新武装：冷却期过了、且手已缓下来（防止回手/惯性余势立刻触发反向翻页）
+  if (!gesture.swipeArmed && now > (gesture.swipeCool || 0) && Math.hypot(wdx, wdy) < dim * 0.06) {
+    gesture.swipeArmed = true;
+  }
 
-  // 选中一律以"手已停稳"为前提：挥动途中绝不触发。停在中央 0.8 秒或停稳后捏合 0.22 秒
-  const cx = window.innerWidth / 2, cy = window.innerHeight / 2;
-  const nearCenter = Math.hypot(gesture.dotX - cx, gesture.dotY - cy) < Math.min(window.innerWidth, window.innerHeight) * 0.16;
+  // 挥动触发：窗口内净位移超过屏幕短边的 11%，取主导轴
+  if (gesture.swipeArmed && !pinching) {
+    const horiz = Math.abs(wdx) > dim * 0.11 && Math.abs(wdx) > Math.abs(wdy) * 1.3;
+    const vert = Math.abs(wdy) > dim * 0.11 && Math.abs(wdy) > Math.abs(wdx) * 1.3;
+    const fieldOn = document.body.classList.contains('field-on') && activeField;
+    if (fieldOn && (horiz || vert)) {
+      if (horiz) activeField.drag.xTarget += (wdx < 0 ? 1 : -1) * activeField.sizes.width * 0.55;
+      else activeField.scrollY.target += (wdy < 0 ? 1 : -1) * activeField.sizes.height * 1.1;
+      gesture.swipeArmed = false; gesture.swipeCool = now + 500; s.length = 0;
+    } else if (!fieldOn && horiz && document.body.classList.contains('ring-on') && window.__RING) {
+      const r = window.__RING;
+      r.animateRotTo(Math.round(r.rot) + (wdx < 0 ? 1 : -1), 520);   // 一次挥动固定翻一张，节奏可预期
+      gesture.swipeArmed = false; gesture.swipeCool = now + 500; s.length = 0;
+    }
+  }
+
+  // 选中以"手已停稳"为前提：挥动途中绝不触发。停在中央 0.8 秒或停稳后捏合 0.22 秒
+  const nearCenter = Math.hypot(gesture.dotX - vw / 2, gesture.dotY - vh / 2) < dim * 0.16;
   if (gesture.dwellFired) {
     if (!still && !pinching) gesture.dwellFired = false;
     gesture.dwell = 0;
-  } else if (still && (pinchHeld || nearCenter) && centerTarget()) {
+  } else if (still && restedMs > 250 && now > (gesture.swipeCool || 0) && (pinchHeld || nearCenter) && centerTarget()) {
     gesture.dwell += dt * 1000;
     if (pinchHeld || gesture.dwell >= 800) { selectCenter(); gesture.dwellFired = true; gesture.dwell = 0; }
   } else {
     gesture.dwell = 0;
   }
   if (dot) dot.style.setProperty('--dwell', Math.min(1, gesture.dwell / 800).toFixed(2));
-
-  // 绝对映射施加位置
-  if (document.body.classList.contains('field-on') && activeField) {
-    activeField.drag.xTarget = gesture.anchor.dragX + -offX * (activeField.sizes.width / window.innerWidth) * 2.2;
-    activeField.scrollY.target = gesture.anchor.scroll + -offY * (activeField.sizes.height / window.innerHeight) * 4.2;
-  } else if (document.body.classList.contains('ring-on') && window.__RING) {
-    const r = window.__RING;
-    r.rot = gesture.anchor.rot + -offX / r.geom.pxPerStep * 1.6;
-    if (still && restedMs > 350) {
-      // 真正静止后向最近专辑吸附：移动锚点而不是直接改 rot，与绝对映射不冲突
-      gesture.anchor.rot += (Math.round(r.rot) - r.rot) * 0.25;
-    }
-    r.dirty = true;
-  }
 }
 
 async function toggleGesture() {
@@ -940,9 +939,9 @@ async function toggleGesture() {
     cancelAnimationFrame(gesture.ctrlLoop);
     gesture.ctrlLoop = null;
     gesture.hand = null;
+    gesture.samples.length = 0;
     gesture.dotInit = false;
-    gesture.anchor = null;
-    if (window.__RING) window.__RING.gestureActive = false;
+    gesture.swipeArmed = true;
     btn.classList.remove('on');
     const label = document.querySelector('#btn-gesture span');
     if (label) label.textContent = 'GESTURE';
@@ -1019,7 +1018,7 @@ async function toggleGesture() {
     gesture.on = true;
     btn.classList.remove('loading');
     btn.classList.add('on');
-    showNote('手势已开启：移动手 = 转动/平移，上抬手 = 向前飞，手移到中央停住 = 选中');
+    showNote('手势已开启：快挥一下 = 翻一张/平移，上下快挥 = 纵深，停在画面中央 = 选中');
     gesture.tPrev = 0;
     gesture.dotInit = false;
     gesture.dwell = 0;
