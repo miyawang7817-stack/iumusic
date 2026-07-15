@@ -76,6 +76,16 @@ const HARNESS = `(() => {
           for (const li of document.querySelectorAll('.av-tracks li')) li.classList.toggle('playing', li.textContent.trim() === cur.name);
         }
       }
+      // 相机运镜：直接驱动歌曲页特效场（漂浮 3D 卡片阵）——持续向纵深穿行 +
+      // 轻微横向漂移，让每张卡片迎面流过，把这段特效当主角展示
+      const cam = D.camera;
+      if (cam && window.__FIELD && document.body.classList.contains('field-on') && ts >= cam.t0 && ts <= cam.t1) {
+        const F = window.__FIELD;
+        if (!cam._init) { cam._init = true; cam.s0 = F.scrollY.target; cam.x0 = F.drag.xTarget; cam.h = F.sizes.height; cam.w = F.sizes.width; }
+        const u = ts - cam.t0;
+        F.scrollY.target = cam.s0 + u * 0.16 * cam.h + Math.sin(u * 0.62) * 0.30 * cam.h;   // 净向前穿行 + 纵深呼吸
+        F.drag.xTarget = cam.x0 + Math.sin(u * 0.42 + 0.8) * 0.5 * cam.w;                     // 缓慢横向漂移
+      }
     }
     const q = [...rafQ.values()]; rafQ.clear();
     for (const cb of q) { try { cb(vt); } catch (e) { console.error('raf', e); } }
@@ -104,23 +114,18 @@ for (let i = 0; i < 3; i++) {
   moveTo(t, 0.94, 0.72, 0.26);
   moveTo(t + 0.62, 0.68, 0.75, 0.85);
 }
-// 15.5 捏合 → 进入 LILAC 专辑。此后手只缓慢平移展示卡片场，绝不快挥/捏合，
-// 点歌全交给左侧曲目列表点击 → 保证“点哪首唱哪首”音画同步
-moveTo(18.5, 0.58, 0.60, 2.2);
-moveTo(23.0, 0.44, 0.52, 2.8);
-moveTo(28.5, 0.58, 0.62, 2.6);
-moveTo(34.0, 0.46, 0.50, 2.8);
-moveTo(40.0, 0.60, 0.60, 2.6);
-moveTo(45.5, 0.5, 0.55, 1.6);
+// 15.5 捏合 → 进入 LILAC 专辑。进专辑后手离场（handOff=16.2），改由相机运镜
+// 直接驱动特效场穿行，点歌用列表点击 —— 让漂浮卡片特效当主角、音画同步
 
 const clickTrack = (name) =>
   `for (const li of document.querySelectorAll('.av-tracks li')) { if (li.textContent.trim() === ${JSON.stringify(name)}) { li.click(); break; } }`;
 
 const director = {
   handOn: 8.2,
-  handOff: 47.5,
+  handOff: 16.2,                       // 进专辑后手离场，镜头交给相机运镜
   hand,
   pinch: [ { t0: 15.5, t1: 15.95 } ],
+  camera: { t0: 16.6, t1: 46.5 },      // 特效场穿行运镜窗口
   captions: [],
   nowPlaying: [
     { t0: T_CELEB + 0.15, t1: T_LILAC, name: 'Celebrity' },
