@@ -82,14 +82,15 @@ const HARNESS = `(() => {
       const cam = D.camera;
       if (cam && window.__FIELD && document.body.classList.contains('field-on') && ts >= cam.t0 && ts <= cam.t1) {
         const F = window.__FIELD;
-        if (!cam._init) { cam._init = true; cam.s0 = F.scrollY.target; cam.x0 = F.drag.xTarget; cam.h = F.sizes.height; cam.w = F.sizes.width; }
+        if (!cam._init) { cam._init = true; cam.s0 = F.scrollY.target; cam.x0 = F.drag.xTarget; cam.y0 = F.drag.yTarget; cam.h = F.sizes.height; cam.w = F.sizes.width; }
         const u = ts - cam.t0, K = cam.keys;
         let i = 0; while (i < K.length - 1 && u > K[i + 1][0]) i++;
         const a = K[i], b = K[Math.min(i + 1, K.length - 1)];
         const span = Math.max(1e-3, b[0] - a[0]);
         let p = Math.min(1, Math.max(0, (u - a[0]) / span)); p = p * p * (3 - 2 * p);
         F.scrollY.target = cam.s0 + (a[1] + (b[1] - a[1]) * p) * cam.h;
-        F.drag.xTarget = cam.x0 + (a[2] + (b[2] - a[2]) * p) * cam.w;
+        F.drag.xTarget = cam.x0 + (a[2] + (b[2] - a[2]) * p) * cam.w;   // 左右平移
+        F.drag.yTarget = cam.y0 + (a[3] + (b[3] - a[3]) * p) * cam.h;   // 上下平移（跟手视差）
       }
     }
     const q = [...rafQ.values()]; rafQ.clear();
@@ -130,19 +131,23 @@ const director = {
   handOff: 16.2,                       // 进专辑后手离场，镜头交给相机运镜
   hand,
   pinch: [ { t0: 15.5, t1: 15.95 } ],
-  camera: {                            // 特效场：无限隧道里猛冲往里 / 急退往外
-    t0: 16.6, t1: 46.5,                // keys: [u(秒), 纵深(屏高倍，增=前冲/减=后退), 横移]
+  camera: {                            // 特效场运镜：先四向平移(跟手视差) → 再猛冲纵深
+    t0: 16.6, t1: 46.5,                // keys: [u(秒), 纵深(屏高倍), 横移(屏宽倍), 纵移(屏高倍)]
     keys: [
-      [0.0, 0.0, 0.0],
-      [2.8, 5.5, -0.30],   // 猛冲往里（卡片呼啸掠过）
-      [5.5, 1.0, 0.40],    // 急退往外（卡片退远）
-      [9.0, 7.8, -0.20],   // 深冲
-      [12.0, 2.6, 0.45],   // 后退
-      [16.0, 10.5, -0.10], // 巨冲（LILAC 切歌前后）
-      [19.5, 4.6, -0.42],  // 急退
-      [23.5, 13.0, 0.30],  // 终极冲刺
-      [27.0, 8.0, 0.30],   // 缓冲
-      [29.9, 10.0, 0.0],   // 收势
+      [0.0, 0.0, 0.0, 0.0],
+      // —— 第一幕：卡片随（鼠标）上下左右平移，充分展示跟手视差 ——
+      [3.0, 1.0, -0.65, 0.0],   // 往左（卡片整片右滑）
+      [5.5, 1.4, 0.65, 0.0],    // 往右
+      [8.0, 1.8, 0.0, -0.55],   // 往上
+      [10.5, 2.1, 0.0, 0.55],   // 往下
+      [13.0, 2.5, -0.5, -0.45], // 斜向左上
+      [15.5, 2.9, 0.5, 0.45],   // 斜向右下
+      // —— 第二幕：猛冲往里 / 急退往外（LILAC 段的纵深冲击）——
+      [18.5, 9.0, -0.2, 0.0],   // 巨冲往里（卡片呼啸掠过）
+      [21.5, 3.5, 0.4, -0.2],   // 急退往外
+      [25.0, 11.5, -0.1, 0.2],  // 终极冲刺
+      [28.0, 6.5, 0.3, 0.0],    // 缓冲
+      [29.9, 9.5, 0.0, 0.0],    // 收势
     ],
   },
   captions: [],
