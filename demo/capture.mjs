@@ -7,7 +7,7 @@ import fs from 'fs';
 const [W, H, OUT] = [parseInt(process.argv[2]), parseInt(process.argv[3]), process.argv[4]];
 const URL = process.argv[5] || 'https://miyawang7817-stack.github.io/iumusic/';
 const DRY = false;
-const FPS = 30, TOTAL_S = 43.5, TOTAL = Math.round(TOTAL_S * FPS);
+const FPS = 30, TOTAL_S = 52, TOTAL = Math.round(TOTAL_S * FPS);
 fs.mkdirSync(OUT, { recursive: true });
 
 const HARNESS = `(() => {
@@ -63,6 +63,19 @@ const HARNESS = `(() => {
       const c = D.captions.find((c) => ts >= c.t0 && ts < c.t1);
       if (c) { if (cap.textContent !== c.text) cap.textContent = c.text; cap.style.opacity = '1'; }
       else cap.style.opacity = '0';
+      // 逐帧强制“正在播放”曲目：np 条 + 曲目高亮始终与 muxed 配乐一致，
+      // 不受线上 iTunes 快慢/失败影响（保证“点哪首唱哪首”音画同步）
+      if (D.nowPlaying) {
+        const cur = D.nowPlaying.find((x) => ts >= x.t0 && ts < x.t1);
+        const bar = document.getElementById('now-playing');
+        const title = document.getElementById('np-title');
+        if (cur && bar && title) {
+          bar.hidden = false;
+          const tog = document.getElementById('np-toggle'); if (tog) tog.style.display = '';
+          if (title.textContent !== cur.name) title.textContent = cur.name;
+          for (const li of document.querySelectorAll('.av-tracks li')) li.classList.toggle('playing', li.textContent.trim() === cur.name);
+        }
+      }
     }
     const q = [...rafQ.values()]; rafQ.clear();
     for (const cb of q) { try { cb(vt); } catch (e) { console.error('raf', e); } }
@@ -79,45 +92,50 @@ const HARNESS = `(() => {
 })();`;
 
 // ---------- 分镜（虚拟时间轴，秒） ----------
+const T_CELEB = 18.5;   // 点 Celebrity 的时刻（配乐第一首在此进）
+const T_LILAC = 33.0;   // 点 라일락 LILAC 的时刻（配乐切第二首）
 const hand = [];
 let hx = 0.68, hy = 0.75;
 const moveTo = (t0, x, y, dur) => { hand.push({ t0, t1: t0 + dur, x0: hx, y0: hy, x1: x, y1: y }); hx = x; hy = y; };
 
-// 三次右挥 → 轮盘退三张 → LILAC 居中（专辑序 12 = -3 mod 15）
-// 节奏：快挥出 0.26s → 慢收回 0.85s → 停 ≥0.7s（重新武装需真正停稳 250ms）
+// 8–15s：三次右挥翻到 LILAC
 for (let i = 0; i < 3; i++) {
   const t = 8.5 + i * 2.2;
   moveTo(t, 0.94, 0.72, 0.26);
   moveTo(t + 0.62, 0.68, 0.75, 0.85);
 }
-// 15.5 捏合 → 选中 LILAC（停稳后捏合 0.22s 触发，无需移动）
-moveTo(18.8, 0.73, 0.78, 0.8);          // 专辑页：横向快挥 = 平移
-moveTo(20.7, 0.72, 0.30, 0.3);          // 上挥 = 向纵深飞
-moveTo(21.7, 0.70, 0.74, 2.0);          // 慢慢收回（不触发）
-moveTo(24.4, 0.70, 0.28, 0.3);          // 再飞一段
-moveTo(24.9, 0.56, 0.5, 2.5);           // 缓缓漂到中部（慢速不触发）
-// 28.2 捏合 → 点歌
-moveTo(31.0, 0.52, 0.46, 1.2);          // 微漂移
-// 32.6 BACK 点击（action）
-moveTo(34.0, 0.15, 0.7, 0.26);          // 回到轮盘：左挥前进
-moveTo(34.9, 0.6, 0.72, 0.85);
-moveTo(36.6, 0.15, 0.7, 0.26);
-moveTo(37.5, 0.6, 0.72, 0.85);
+// 15.5 捏合 → 进入 LILAC 专辑。此后手只缓慢平移展示卡片场，绝不快挥/捏合，
+// 点歌全交给左侧曲目列表点击 → 保证“点哪首唱哪首”音画同步
+moveTo(18.5, 0.58, 0.60, 2.2);
+moveTo(23.0, 0.44, 0.52, 2.8);
+moveTo(28.5, 0.58, 0.62, 2.6);
+moveTo(34.0, 0.46, 0.50, 2.8);
+moveTo(40.0, 0.60, 0.60, 2.6);
+moveTo(45.5, 0.5, 0.55, 1.6);
+
+const clickTrack = (name) =>
+  `for (const li of document.querySelectorAll('.av-tracks li')) { if (li.textContent.trim() === ${JSON.stringify(name)}) { li.click(); break; } }`;
 
 const director = {
   handOn: 8.2,
-  handOff: 38.6,
+  handOff: 47.5,
   hand,
-  pinch: [ { t0: 15.5, t1: 15.95 }, { t0: 28.2, t1: 28.65 } ],
+  pinch: [ { t0: 15.5, t1: 15.95 } ],
   captions: [],
+  nowPlaying: [
+    { t0: T_CELEB + 0.15, t1: T_LILAC, name: 'Celebrity' },
+    { t0: T_LILAC + 0.15, t1: 46.8, name: '라일락 LILAC' },
+  ],
   actions: [
     { t: 8.2, js: `window.__testCtrlOnly(); document.getElementById('btn-gesture').classList.add('on');` },
-    { t: 32.6, js: `document.getElementById('btn-ring-back').click();` },
-    { t: 38.9, js: `
+    { t: T_CELEB, js: clickTrack('Celebrity') },
+    { t: T_LILAC, js: clickTrack('라일락 LILAC') },
+    { t: 46.8, js: `document.getElementById('btn-ring-back').click();` },
+    { t: 49.2, js: `
       const o = document.createElement('div'); o.id = 'vt-end';
       o.style.cssText = 'position:fixed;inset:0;z-index:50;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2vmax;background:rgba(19,19,19,0);transition:background 1.2s ease;pointer-events:none;';
-      o.innerHTML = '<div style="font-size:max(30px,3.4vmax);letter-spacing:.18em;color:rgba(255,251,235,.95);opacity:0;transition:opacity 1.2s ease .3s;">IU \u00B7 MAGAZINE</div>'
-        + '<div style="font-size:max(11px,.9vmax);letter-spacing:.3em;color:rgba(255,251,235,.62);opacity:0;transition:opacity 1.2s ease .7s;">15 ALBUMS \u00B7 2008 \u2014 2025 \u00B7 WEBGL + GESTURE + MUSIC</div>';
+      o.innerHTML = '<div style="font-size:max(30px,3.4vmax);letter-spacing:.18em;color:rgba(255,251,235,.95);opacity:0;transition:opacity 1.2s ease .3s;">IU · MAGAZINE</div>'
+        + '<div style="font-size:max(11px,.9vmax);letter-spacing:.3em;color:rgba(255,251,235,.62);opacity:0;transition:opacity 1.2s ease .7s;">15 ALBUMS · 2008 — 2025</div>';
       document.body.appendChild(o);
       requestAnimationFrame(() => { o.style.background = 'rgba(19,19,19,.8)'; for (const d of o.children) d.style.opacity = '1'; });
     ` },
@@ -147,9 +165,10 @@ const marks = {};
 for (let f = 0; f < TOTAL; f++) {
   await p.evaluate(() => window.__tick(1000 / 30));
   await p.screenshot({ path: `${OUT}/f${String(f).padStart(5, '0')}.jpg`, type: 'jpeg', quality: 92 });
-  if (f === Math.round(18.4 * FPS)) marks.albumOpened = await p.evaluate(() => ({ field: document.body.classList.contains('field-on'), title: document.querySelector('.av-title')?.textContent }));
-  if (f === Math.round(31.5 * FPS)) marks.nowPlaying = await p.evaluate(() => ({ np: document.getElementById('np-title').textContent, hidden: document.getElementById('now-playing').hidden }));
-  if (f === Math.round(33.8 * FPS)) marks.backToRing = await p.evaluate(() => document.body.classList.contains('ring-on'));
+  if (f === Math.round(17.5 * FPS)) marks.albumOpened = await p.evaluate(() => ({ field: document.body.classList.contains('field-on'), title: document.querySelector('.av-title')?.textContent }));
+  if (f === Math.round(28.0 * FPS)) marks.npCelebrity = await p.evaluate(() => document.getElementById('np-title').textContent);
+  if (f === Math.round(42.0 * FPS)) marks.npLilac = await p.evaluate(() => document.getElementById('np-title').textContent);
+  if (f === Math.round(48.5 * FPS)) marks.backToRing = await p.evaluate(() => document.body.classList.contains('ring-on'));
   if (DRY && f % 150 === 0) console.error(`f${f} ${(Date.now() - t0) / 1000 | 0}s`);
 }
 console.log(JSON.stringify({ frames: TOTAL, realSec: (Date.now() - t0) / 1000 | 0, marks, errors: errs.slice(0, 5) }));

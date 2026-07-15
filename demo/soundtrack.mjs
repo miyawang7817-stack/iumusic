@@ -4,32 +4,41 @@
 import fs from 'fs';
 
 const OUT = process.argv[2] || 'demo';
-// 优先挑最出圈、最适合做 BGM 的曲目；命中前两首即用于交叉淡入
-const WANT = ['LILAC', 'Blueming', 'Celebrity', 'eight', 'Palette', 'Through the Night', 'Good Day', 'Love wins all'];
+// 顺序即视频里点歌顺序：先 Celebrity 后 LILAC（与画面“点哪首唱哪首”对齐）。
+// 每首带若干候选写法，精确匹配曲名，抓不到才容错。
+const WANT = [
+  { key: 'Celebrity', terms: ['Celebrity'], names: ['celebrity'] },
+  { key: 'LILAC', terms: ['LILAC 라일락', '라일락 LILAC', 'LILAC'], names: ['라일락lilac', 'lilac라일락', 'lilac'] },
+];
 
-async function find(term) {
-  const q = encodeURIComponent('IU ' + term);
-  const url = `https://itunes.apple.com/search?term=${q}&country=KR&media=music&limit=15`;
-  const r = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
-  if (!r.ok) throw new Error('http ' + r.status);
-  const d = await r.json();
-  const hit = d.results.find((x) => /(^|\W)IU(\W|$)|아이유/i.test(x.artistName || '') && x.previewUrl)
-           || d.results.find((x) => x.previewUrl);
-  return hit ? { want: term, title: hit.trackName, artist: hit.artistName, url: hit.previewUrl } : null;
+const norm = (s) => (s || '').toLowerCase().replace(/[^a-z0-9가-힣]/g, '');
+
+async function find(spec) {
+  for (const term of spec.terms) {
+    const q = encodeURIComponent('IU ' + term);
+    const url = `https://itunes.apple.com/search?term=${q}&country=KR&media=music&limit=25`;
+    let d;
+    try {
+      const r = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+      if (!r.ok) throw new Error('http ' + r.status);
+      d = await r.json();
+    } catch (e) { console.error(`fail "${term}": ${e.message}`); continue; }
+    const iu = d.results.filter((x) => (/(^|\W)IU(\W|$)|아이유/i.test(x.artistName || '')) && x.previewUrl);
+    const hit = spec.names.map((n) => iu.find((x) => norm(x.trackName) === n)).find(Boolean)
+             || iu.find((x) => spec.names.some((n) => norm(x.trackName).includes(n)))
+             || iu[0];
+    if (hit) return { want: spec.key, title: hit.trackName, artist: hit.artistName, url: hit.previewUrl };
+  }
+  return null;
 }
 
 const picked = [];
-for (const w of WANT) {
-  if (picked.length >= 2) break;
+for (const spec of WANT) {
   try {
-    const h = await find(w);
-    if (h && !picked.some((p) => p.title === h.title)) {
-      picked.push(h);
-      console.log(`picked "${w}" -> ${h.artist} — ${h.title}`);
-    } else {
-      console.log(`skip "${w}" (no IU preview)`);
-    }
-  } catch (e) { console.error(`fail "${w}": ${e.message}`); }
+    const h = await find(spec);
+    if (h) { picked.push(h); console.log(`picked "${spec.key}" -> ${h.artist} — ${h.title}`); }
+    else { console.log(`skip "${spec.key}" (no IU preview)`); }
+  } catch (e) { console.error(`fail "${spec.key}": ${e.message}`); }
 }
 
 if (picked.length === 0) { console.error('NO IU PREVIEW FOUND — will fall back to lo-fi'); process.exit(1); }
