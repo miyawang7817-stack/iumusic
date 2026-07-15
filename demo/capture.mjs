@@ -76,15 +76,20 @@ const HARNESS = `(() => {
           for (const li of document.querySelectorAll('.av-tracks li')) li.classList.toggle('playing', li.textContent.trim() === cur.name);
         }
       }
-      // 相机运镜：直接驱动歌曲页特效场（漂浮 3D 卡片阵）——持续向纵深穿行 +
-      // 轻微横向漂移，让每张卡片迎面流过，把这段特效当主角展示
+      // 相机运镜：在无限卡片隧道里【猛冲往里 → 急退往外】。大幅前冲让卡片呼啸掠过，
+      // 随即后退让卡片急速退远 —— 场自身缓动(0.12/帧)把每次跳变化成有惯性的“嗖”。
+      // 关键帧 [u(秒), 纵深(屏高倍，增=前冲/减=后退), 横移(屏宽倍)]，smoothstep 插值
       const cam = D.camera;
       if (cam && window.__FIELD && document.body.classList.contains('field-on') && ts >= cam.t0 && ts <= cam.t1) {
         const F = window.__FIELD;
         if (!cam._init) { cam._init = true; cam.s0 = F.scrollY.target; cam.x0 = F.drag.xTarget; cam.h = F.sizes.height; cam.w = F.sizes.width; }
-        const u = ts - cam.t0;
-        F.scrollY.target = cam.s0 + u * 0.16 * cam.h + Math.sin(u * 0.62) * 0.30 * cam.h;   // 净向前穿行 + 纵深呼吸
-        F.drag.xTarget = cam.x0 + Math.sin(u * 0.42 + 0.8) * 0.5 * cam.w;                     // 缓慢横向漂移
+        const u = ts - cam.t0, K = cam.keys;
+        let i = 0; while (i < K.length - 1 && u > K[i + 1][0]) i++;
+        const a = K[i], b = K[Math.min(i + 1, K.length - 1)];
+        const span = Math.max(1e-3, b[0] - a[0]);
+        let p = Math.min(1, Math.max(0, (u - a[0]) / span)); p = p * p * (3 - 2 * p);
+        F.scrollY.target = cam.s0 + (a[1] + (b[1] - a[1]) * p) * cam.h;
+        F.drag.xTarget = cam.x0 + (a[2] + (b[2] - a[2]) * p) * cam.w;
       }
     }
     const q = [...rafQ.values()]; rafQ.clear();
@@ -125,7 +130,21 @@ const director = {
   handOff: 16.2,                       // 进专辑后手离场，镜头交给相机运镜
   hand,
   pinch: [ { t0: 15.5, t1: 15.95 } ],
-  camera: { t0: 16.6, t1: 46.5 },      // 特效场穿行运镜窗口
+  camera: {                            // 特效场：无限隧道里猛冲往里 / 急退往外
+    t0: 16.6, t1: 46.5,                // keys: [u(秒), 纵深(屏高倍，增=前冲/减=后退), 横移]
+    keys: [
+      [0.0, 0.0, 0.0],
+      [2.8, 5.5, -0.30],   // 猛冲往里（卡片呼啸掠过）
+      [5.5, 1.0, 0.40],    // 急退往外（卡片退远）
+      [9.0, 7.8, -0.20],   // 深冲
+      [12.0, 2.6, 0.45],   // 后退
+      [16.0, 10.5, -0.10], // 巨冲（LILAC 切歌前后）
+      [19.5, 4.6, -0.42],  // 急退
+      [23.5, 13.0, 0.30],  // 终极冲刺
+      [27.0, 8.0, 0.30],   // 缓冲
+      [29.9, 10.0, 0.0],   // 收势
+    ],
+  },
   captions: [],
   nowPlaying: [
     { t0: T_CELEB + 0.15, t1: T_LILAC, name: 'Celebrity' },
