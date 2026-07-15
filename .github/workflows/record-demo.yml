@@ -1,7 +1,7 @@
 name: Record demo video
 
 # 手动触发：Actions 页面点 Run workflow（或 API dispatch）。
-# 在 GitHub 服务器上打开线上站点，虚拟时钟逐帧录制 → 合成配乐 → 发布为 demo-video Release
+# 在 GitHub 服务器上打开线上站点，虚拟时钟逐帧录制 → 配 IU 官方试听 → 发布为 demo-video Release
 on:
   workflow_dispatch:
     inputs:
@@ -26,14 +26,21 @@ jobs:
         with:
           node-version: 22
 
-      - name: 安装依赖（ffmpeg / numpy / playwright）
+      - name: 安装依赖（ffmpeg / 中日韩字体 / playwright）
         run: |
           sudo apt-get update -q
-          sudo apt-get install -y -q ffmpeg python3-numpy
+          # fonts-noto-cjk：修复韩文/中文渲染成方块（乱码）的问题
+          sudo apt-get install -y -q ffmpeg python3-numpy fonts-noto-cjk fonts-noto-color-emoji
+          sudo fc-cache -f
+          echo "已安装 CJK 字体："; fc-list | grep -i "noto sans cjk" | head -3
           cd demo && npm init -y > /dev/null && npm install playwright > /dev/null
 
-      - name: 生成配乐
+      - name: 生成备用配乐（抓不到 IU 音源时兜底）
         run: python3 demo/music.py demo/music.wav
+
+      - name: 抓取 IU 官方试听音源
+        continue-on-error: true
+        run: node demo/soundtrack.mjs demo
 
       - name: 录制横版 1920x1080
         working-directory: demo
@@ -43,28 +50,59 @@ jobs:
         working-directory: demo
         run: node capture.mjs 1080 1920 fr916 "$SITE_URL"
 
-      - name: 合成编码
+      - name: 合成音轨 + 编码
         run: |
+          set -e
+          # 优先用 IU 试听拼音轨：两首交叉淡入覆盖全片；只抓到一首则循环；都没有才回退 lo-fi
+          if [ -f demo/preview1.m4a ] && [ -f demo/preview2.m4a ]; then
+            echo "配乐 = IU 官方试听（双曲交叉淡入）"
+            ffmpeg -y -i demo/preview1.m4a -i demo/preview2.m4a -filter_complex \
+              "[0:a][1:a]acrossfade=d=3:c1=tri:c2=tri[m];[m]atrim=0:43.5,afade=t=out:st=40.3:d=3.2,aresample=44100[a]" \
+              -map "[a]" -c:a pcm_s16le demo/track.wav -loglevel error
+            AUDIO=demo/track.wav
+          elif [ -f demo/preview1.m4a ]; then
+            echo "配乐 = IU 官方试听（单曲循环）"
+            ffmpeg -y -stream_loop 2 -i demo/preview1.m4a -filter_complex \
+              "[0:a]atrim=0:43.5,afade=t=out:st=40.3:d=3.2,aresample=44100[a]" \
+              -map "[a]" -c:a pcm_s16le demo/track.wav -loglevel error
+            AUDIO=demo/track.wav
+          else
+            echo "配乐 = 兜底 lo-fi（未抓到 IU 音源）"
+            AUDIO=demo/music.wav
+          fi
+          echo "音轨信息："; ffprobe -v error -show_entries format=duration,format_name -of default=noprint_wrappers=1 "$AUDIO"
           for v in "fr169:iu-magazine-demo-h.mp4" "fr916:iu-magazine-demo-v.mp4"; do
             d=${v%%:*}; o=${v##*:}
-            ffmpeg -y -framerate 30 -i demo/$d/f%05d.jpg -i demo/music.wav \
-              -filter_complex "[0:v]format=yuv420p[v];[1:a]atrim=0:43.5,afade=t=out:st=40:d=3.4[a]" \
+            ffmpeg -y -framerate 30 -i demo/$d/f%05d.jpg -i "$AUDIO" \
+              -filter_complex "[0:v]format=yuv420p[v];[1:a]atrim=0:43.5[a]" \
               -map "[v]" -map "[a]" -c:v libx264 -crf 18 -preset medium -c:a aac -b:a 192k \
               -movflags +faststart "$o" -loglevel error
           done
+          # 抽两帧做文字渲染自检（韩文/中文应正常显示）
+          ffmpeg -y -ss 10 -i iu-magazine-demo-h.mp4 -frames:v 1 -q:v 3 check-frame-10s.jpg -loglevel error
+          ffmpeg -y -ss 29 -i iu-magazine-demo-h.mp4 -frames:v 1 -q:v 3 check-frame-29s.jpg -loglevel error
           ls -la iu-magazine-demo-*.mp4
 
       - name: 上传为运行产物
         uses: actions/upload-artifact@v4
         with:
           name: iu-magazine-demo
-          path: iu-magazine-demo-*.mp4
+          path: |
+            iu-magazine-demo-*.mp4
+            check-frame-*.jpg
+            demo/soundtrack.json
 
       - name: 发布为 Release（demo-video）
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          NOTES="自动录制于 $SITE_URL（横版 1920x1080 + 竖版 1080x1920，30fps）"
+          if [ -f demo/soundtrack.json ]; then
+            NOTES="$NOTES%0A%0A配乐（IU 官方 30 秒试听）：%0A$(node -e "for(const s of require('./demo/soundtrack.json'))console.log('- '+s.artist+' — '+s.title)" | sed ':a;N;$!ba;s/\n/%0A/g')"
+          fi
           gh release delete demo-video --cleanup-tag -y || true
-          gh release create demo-video iu-magazine-demo-h.mp4 iu-magazine-demo-v.mp4 \
+          FILES="iu-magazine-demo-h.mp4 iu-magazine-demo-v.mp4 check-frame-10s.jpg check-frame-29s.jpg"
+          [ -f demo/soundtrack.json ] && FILES="$FILES demo/soundtrack.json"
+          gh release create demo-video $FILES \
             --title "IU Magazine 演示视频" \
-            --notes "自动录制于 $SITE_URL（横版 1920x1080 + 竖版 1080x1920，30fps）"
+            --notes "$NOTES"
