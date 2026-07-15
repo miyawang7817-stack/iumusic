@@ -53,34 +53,41 @@ jobs:
       - name: 合成音轨 + 编码
         run: |
           set -e
-          # 优先用 IU 试听拼音轨：两首交叉淡入覆盖全片；只抓到一首则循环；都没有才回退 lo-fi
+          # 音画同步：前 18.5s 静音（还没进播放页），18.5s 点 Celebrity 起 Celebrity，
+          # 33s 点 LILAC 起 LILAC。preview1=Celebrity，preview2=LILAC（soundtrack.mjs 顺序）
           if [ -f demo/preview1.m4a ] && [ -f demo/preview2.m4a ]; then
-            echo "配乐 = IU 官方试听（双曲交叉淡入）"
+            echo "配乐 = IU 官方试听（Celebrity → LILAC，前奏静音）"
             ffmpeg -y -i demo/preview1.m4a -i demo/preview2.m4a -filter_complex \
-              "[0:a][1:a]acrossfade=d=3:c1=tri:c2=tri[m];[m]atrim=0:43.5,afade=t=out:st=40.3:d=3.2,aresample=44100[a]" \
+              "[0:a]atrim=0:14.5,afade=t=in:st=0:d=0.3[c];\
+               [1:a]atrim=0:19,afade=t=in:st=0:d=0.6,afade=t=out:st=16:d=3[l];\
+               [c][l]concat=n=2:v=0:a=1[cat];\
+               [cat]adelay=18500|18500,aresample=44100[a]" \
               -map "[a]" -c:a pcm_s16le demo/track.wav -loglevel error
             AUDIO=demo/track.wav
           elif [ -f demo/preview1.m4a ]; then
-            echo "配乐 = IU 官方试听（单曲循环）"
-            ffmpeg -y -stream_loop 2 -i demo/preview1.m4a -filter_complex \
-              "[0:a]atrim=0:43.5,afade=t=out:st=40.3:d=3.2,aresample=44100[a]" \
+            echo "配乐 = IU 官方试听（单曲，前奏静音）"
+            ffmpeg -y -i demo/preview1.m4a -filter_complex \
+              "[0:a]atrim=0:30,afade=t=out:st=27:d=3,adelay=18500|18500,aresample=44100[a]" \
               -map "[a]" -c:a pcm_s16le demo/track.wav -loglevel error
             AUDIO=demo/track.wav
           else
-            echo "配乐 = 兜底 lo-fi（未抓到 IU 音源）"
-            AUDIO=demo/music.wav
+            echo "配乐 = 兜底 lo-fi（未抓到 IU 音源，前奏仍静音）"
+            ffmpeg -y -i demo/music.wav -filter_complex \
+              "[0:a]atrim=0:33,adelay=18500|18500,aresample=44100[a]" \
+              -map "[a]" -c:a pcm_s16le demo/track.wav -loglevel error
+            AUDIO=demo/track.wav
           fi
           echo "音轨信息："; ffprobe -v error -show_entries format=duration,format_name -of default=noprint_wrappers=1 "$AUDIO"
           for v in "fr169:iu-magazine-demo-h.mp4" "fr916:iu-magazine-demo-v.mp4"; do
             d=${v%%:*}; o=${v##*:}
             ffmpeg -y -framerate 30 -i demo/$d/f%05d.jpg -i "$AUDIO" \
-              -filter_complex "[0:v]format=yuv420p[v];[1:a]atrim=0:43.5[a]" \
+              -filter_complex "[0:v]format=yuv420p[v];[1:a]apad,atrim=0:52[a]" \
               -map "[v]" -map "[a]" -c:v libx264 -crf 18 -preset medium -c:a aac -b:a 192k \
               -movflags +faststart "$o" -loglevel error
           done
-          # 抽两帧做文字渲染自检（韩文/中文应正常显示）
-          ffmpeg -y -ss 10 -i iu-magazine-demo-h.mp4 -frames:v 1 -q:v 3 check-frame-10s.jpg -loglevel error
-          ffmpeg -y -ss 29 -i iu-magazine-demo-h.mp4 -frames:v 1 -q:v 3 check-frame-29s.jpg -loglevel error
+          # 抽帧自检：Celebrity 播放中(26s)、LILAC 播放中(40s)，验证文字与曲名
+          ffmpeg -y -ss 26 -i iu-magazine-demo-h.mp4 -frames:v 1 -q:v 3 check-frame-celebrity.jpg -loglevel error
+          ffmpeg -y -ss 40 -i iu-magazine-demo-h.mp4 -frames:v 1 -q:v 3 check-frame-lilac.jpg -loglevel error
           ls -la iu-magazine-demo-*.mp4
 
       - name: 上传为运行产物
@@ -101,7 +108,7 @@ jobs:
             NOTES="$NOTES%0A%0A配乐（IU 官方 30 秒试听）：%0A$(node -e "for(const s of require('./demo/soundtrack.json'))console.log('- '+s.artist+' — '+s.title)" | sed ':a;N;$!ba;s/\n/%0A/g')"
           fi
           gh release delete demo-video --cleanup-tag -y || true
-          FILES="iu-magazine-demo-h.mp4 iu-magazine-demo-v.mp4 check-frame-10s.jpg check-frame-29s.jpg"
+          FILES="iu-magazine-demo-h.mp4 iu-magazine-demo-v.mp4 check-frame-celebrity.jpg check-frame-lilac.jpg"
           [ -f demo/soundtrack.json ] && FILES="$FILES demo/soundtrack.json"
           gh release create demo-video $FILES \
             --title "IU Magazine 演示视频" \
