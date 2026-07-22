@@ -6,7 +6,7 @@ html, body { height: 100%; }
 
 body {
   background: rgb(19, 19, 19);
-  background-image: url('../assets/bg-dream.jpg');
+  background-image: url('../assets/bg-sky.jpg');
   background-size: cover;
   background-position: center;
   background-attachment: fixed;
