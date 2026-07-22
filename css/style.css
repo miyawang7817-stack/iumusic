@@ -6,9 +6,7 @@ html, body { height: 100%; }
 
 body {
   background: rgb(19, 19, 19);
-  background-image: url('../assets/bg-stars.gif');
-  background-size: cover;
-  background-position: center;
+  background-image: linear-gradient(180deg, #120e18 0%, #181224 55%, #221933 100%);
   background-attachment: fixed;
   color: rgba(255, 251, 235, 0.6);          /* amber-50/60 */
   font-family: "Helvetica Neue", "Segoe UI", Arial, system-ui, sans-serif;

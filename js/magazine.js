@@ -1681,3 +1681,96 @@ preloadCovers().then(() => {
     showFallbackWall();
   }
 });
+
+/* ---------- 首页背景：高清紫色星空（原生分辨率实时渲染，替代低清 GIF） ---------- */
+(function initStarfield() {
+  const cv = document.createElement('canvas');
+  cv.id = 'bg-stars';
+  cv.style.cssText = 'position:fixed;inset:0;z-index:-1;pointer-events:none;';
+  document.body.appendChild(cv);
+  const ctx = cv.getContext('2d');
+  let W = 0, H = 0, dpr = 1;
+  const PALETTE = ['#cdbcff', '#b18cff', '#e59aff', '#ff9de2', '#9fb8ff', '#fff1fa'];
+
+  // 星形贴图预渲染（带辉光），按需缓存
+  const sprites = {};
+  function starSprite(color, r, glow) {
+    const key = color + '|' + r + '|' + glow;
+    if (sprites[key]) return sprites[key];
+    const pad = r * 3, s = document.createElement('canvas');
+    s.width = s.height = pad * 2;
+    const c = s.getContext('2d');
+    c.translate(pad, pad);
+    c.shadowColor = color; c.shadowBlur = r * (glow ? 2.2 : 1.1);
+    c.fillStyle = color;
+    c.beginPath();
+    for (let i = 0; i < 10; i++) {                 // 五角星
+      const ang = -Math.PI / 2 + i * Math.PI / 5;
+      const rad = i % 2 === 0 ? r : r * 0.46;
+      c[i ? 'lineTo' : 'moveTo'](Math.cos(ang) * rad, Math.sin(ang) * rad);
+    }
+    c.closePath(); c.fill(); c.fill();
+    sprites[key] = s;
+    return s;
+  }
+
+  let stars = [], blobs = [];
+  function build() {
+    dpr = Math.min(2, window.devicePixelRatio || 1);
+    W = cv.width = Math.round(innerWidth * dpr);
+    H = cv.height = Math.round(innerHeight * dpr);
+    cv.style.width = innerWidth + 'px'; cv.style.height = innerHeight + 'px';
+    const area = innerWidth * innerHeight / 518400;             // 相对 960x540 的密度
+    stars = []; blobs = [];
+    const N = Math.round(90 * area);
+    for (let i = 0; i < N; i++) {
+      const big = Math.random() < 0.22;
+      stars.push({
+        x: Math.random() * W, y: Math.random() * H,
+        r: (big ? 9 + Math.random() * 17 : 1.6 + Math.random() * 4.5) * dpr,
+        color: PALETTE[(Math.random() * PALETTE.length) | 0],
+        big, phase: Math.random() * Math.PI * 2,
+        speed: 0.5 + Math.random() * 1.6,
+        base: big ? 0.55 : 0.4, amp: big ? 0.45 : 0.6,
+      });
+    }
+    for (let i = 0; i < 6; i++) {
+      blobs.push({ x: Math.random() * W, y: Math.random() * H, r: (200 + Math.random() * 260) * dpr,
+        hue: 285 + Math.random() * 40, phase: Math.random() * Math.PI * 2 });
+    }
+  }
+  build();
+  addEventListener('resize', build);
+
+  const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  let last = 0;
+  function frame(t) {
+    requestAnimationFrame(frame);
+    if (document.body.classList.contains('field-on')) return;   // 二级页黑底盖住，省电
+    if (t - last < 33) return;                                  // ~30fps 足够
+    last = t;
+    const tt = t / 1000;
+    ctx.clearRect(0, 0, W, H);
+    // 柔和星云
+    for (const b of blobs) {
+      const a = 0.05 + 0.03 * Math.sin(tt * 0.18 + b.phase);
+      const g = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, b.r);
+      g.addColorStop(0, `hsla(${b.hue}, 85%, 62%, ${a})`);
+      g.addColorStop(1, 'hsla(300, 80%, 60%, 0)');
+      ctx.fillStyle = g;
+      ctx.fillRect(b.x - b.r, b.y - b.r, b.r * 2, b.r * 2);
+    }
+    // 星星闪烁
+    for (const s of stars) {
+      const tw = REDUCED ? 0.5 : Math.sin(tt * s.speed + s.phase);
+      const alpha = Math.max(0.06, s.base + s.amp * tw);
+      const scale = s.big ? 1 + 0.10 * tw : 1;
+      const sp = starSprite(s.color, s.r, s.big);
+      ctx.globalAlpha = alpha;
+      const w = sp.width * scale;
+      ctx.drawImage(sp, s.x - w / 2, s.y - w / 2, w, w);
+    }
+    ctx.globalAlpha = 1;
+  }
+  requestAnimationFrame(frame);
+})();
